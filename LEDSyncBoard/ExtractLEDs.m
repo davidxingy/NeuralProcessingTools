@@ -1,4 +1,4 @@
-function [ledStatus, intensities]=ExtractLEDs(filename, nRegions, thresh, colorChannel, saveOutputVideo, regions)
+function [ledStatus, intensities]=extractLEDs(filename, nRegions, thresh, colorChannel, saveOutputVideo, regions)
 % [ledStatus, intensities, regions, usedThreshs]=extractLED(filename, nRegions, thresh, colorChannel, saveOutputVideo, prevDefRegions)
 %
 % Function which extracts from a video containing LEDs the frames where

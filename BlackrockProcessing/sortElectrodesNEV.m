@@ -1,4 +1,4 @@
-function NEV_out=NEV_sort_electrodes(NEV)
+function NEV_out=sortElectrodesNEV(NEV)
 % NEV_out=NEV_sort_electrodes(NEV)
 % Adds another field called NEV.ElectrodeSpikes to NEV.Data, which takes the spike data from
 % NEV.Data.Spikes and sorts it into each electrode (which blackrock doesn't

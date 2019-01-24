@@ -1,4 +1,4 @@
-function regions = GetLEDExtractionRegions(image,nRegions,xlims,ylims)
+function regions = getLEDExtractionRegions(image,nRegions,xlims,ylims)
 % regions = GetLEDExtractionRegions(image,nRegions,xlims,ylims)
 % 
 % A function which acts as a crude GUI to get a cell array of rectangles 

@@ -1,4 +1,4 @@
-function [processed_data, dropped_sig, dropped_sig_intol, artifact_inds, artifacts_intol, flatLineInds, flatlines_intol, noiseLevel]=artifact_rejection(chan_data, maxNumSamples)
+function [processed_data, dropped_sig, dropped_sig_intol, artifact_inds, artifacts_intol, flatLineInds, flatlines_intol, noiseLevel]=artifactRejection(chan_data, maxNumSamples)
 % [processed_data, dropped_sig, dropped_sig_intol, artifact_inds, artifacts_intol, flatLineInds, flatlines_intol]=artifact_rejection(chan_data, [maxNumSamples])
 %
 % chan_data is the NxM matrix contianing the M-sample signal for N channels
