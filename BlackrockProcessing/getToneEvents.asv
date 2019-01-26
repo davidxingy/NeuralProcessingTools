@@ -54,7 +54,7 @@ if nargin>3
             try    
                 dirSuccess = mkdir(plotsDirectory);
             catch 
-                error('Unable to access or make plots directory!');
+                error(sprintf('Unable to make plots directory!',plotsDirectory));
             end
         end
     end
@@ -77,26 +77,25 @@ if isempty(thresholds)
             toneMaxValues(iEvent)=max(micSignal(max(1,toneTimes(iEvent)-15000):toneTimes(iEvent)));
         end
         
-        %use 1.02x the 75th percentile of all those values as the threshold
+        %use 1.05x the 90th percentile of all those values as the threshold
         %since some of them may have high noise before the tone
-        thresholds.(toneNames{iTone})=prctile(toneMaxValues,75)*1.02;
+        thresholds.(toneNames{iTone})=prctile(toneMaxValues,90)*1.05;
     end
 else
     %check that the threshold names match the tone names in toneTypeEvents
     toneThreshNames=fieldnames(thresholds);
-    for iName=1:length(toneNames)
-        if ~any(strcmpi(toneThreshNames,toneNames{iName}))
+    for iName=1:length(toneThreshNames)
+        if ~any(strcmpi(toneThreshNames{iName},toneNames))
             error('Field names in manual thresholds input must match with the names in toneTypeEvents!')
         end
     end
 end
 
 % go through each type of tone
-toneEvents=struct();
 for iTone=1:length(toneNames)
     % find threshold crossings
     allToneStarts=find(micSignal(2:end)>thresholds.(toneNames{iTone}) & ...
-        micSignal(1:end-1)<thresholds.(toneNames{iTone}))+1;
+        micSignal(1:end-1)<thresholds.(toneNames{iTone}));
     
     % get the first threshold crossing after each event, and use that as
     % the time the tone is played
@@ -110,8 +109,9 @@ for iTone=1:length(toneNames)
             warning(sprintf('No tone found for the %u event of the %s tone!',iEvent,toneNames{iTone}));
             continue
         elseif  thisToneStart>toneTimes(iEvent)+15000
-            warning(sprintf('Event %u of the %s tone is %g.2 ms before the detected tone!',...
+            warning(sprintf('The %uth event of the %s tone is %g.2 ms before the detected tone!',...
                 iEvent,toneNames{iTone},thisToneStart-toneTimes(iEvent)));
+            continue
         end
         
         %save the time
@@ -120,7 +120,7 @@ for iTone=1:length(toneNames)
         %save plots if requested
         if ~isempty(plotsDirectory)
             %make plot
-            plot_h=figure('Units','pixels','OuterPosition',[100, 100, 1000, 700],'Visible','off');
+            figure('Units','pixels','OuterPosition',[100, 100, 1000, 700])%,'Visible','off');
             plotSig=micSignal(max(1,toneTimes(iEvent)-10000):min(thisToneStart+30000,length(micSignal)));
             ax(1)=plot((1:length(plotSig))/30,plotSig);
             hold on
@@ -134,8 +134,7 @@ for iTone=1:length(toneNames)
             box off
             
             %save
-            saveas(plot_h,fullfile(plotsDirectory,sprintf('%sTone_%u',toneNames{iTone},iEvent)),'png');
-            close(plot_h)
+            saveas(gcf,fullfile(plotsDirectory)
             
         end
         
