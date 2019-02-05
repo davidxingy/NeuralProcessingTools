@@ -69,109 +69,37 @@ else
     positiveIsALeading=1;
 end
 
-
 % find edge times
 ARisingEdges=find(Avoltage(2:end)>thresh & Avoltage(1:end-1)<thresh)+1;
 AFallingEdges=find(Avoltage(2:end)<thresh & Avoltage(1:end-1)>thresh)+1;
 BRisingEdges=find(Bvoltage(2:end)>thresh & Bvoltage(1:end-1)<thresh)+1;
 BFallingEdges=find(Bvoltage(2:end)<thresh & Bvoltage(1:end-1)>thresh)+1;
 
-
 % For all edge times, determine whether A is leading or lagging.
-% To do so, look at the next edge, and use the following rules:
+% To do so, look at what B is, and use the following rules:
 % Current edge is Rising A:
-%   Next edge is Rising B -     A is leading
-%   Next edge is Falling B -    A is lagging
-%   Next edge is Faling A -     A is lagging
+%   B is low    -   A is leading
+%   B is high   -   A is lagging
 % 
 % Current edge is Falling A:
-%   Next edge is Rising B -     A is lagging
-%   Next edge is Falling B -    A is leading
-%   Next edge is Rising A -     A is lagging
+%   B is high   -   A is leading
+%   B is low    -   A is lagging
 % 
 % Current edge is Rising B:
-%   Next edge is Rising A -     A is lagging
-%   Next edge is Falling A -    A is leading
-%   Next edge is Falling B -    A is leading
+%   A is high   -   A is leading
+%   A is low    -   A is lagging
 % 
 % Current edge is Falling B:
-%   Next edge is Rising A -     A is leading
-%   Next edge is Falling A -    A is lagging
-%   Next edge is Rising B -     A is leading
+%   A is low    -   A is leading
+%   A is high   -   A is lagging
 
 
-% put all of the edges into a cell so we can loop through all of them
-edgesCell{1}=ARisingEdges;
-edgesCellLabels{1}=ones(1,length(ARisingEdges)); %label for A rising is 1
-edgesCell{2}=AFallingEdges;
-edgesCellLabels{2}=2*ones(1,length(AFallingEdges)); %label for A falling is 2
-edgesCell{3}=BRisingEdges;
-edgesCellLabels{3}=3*ones(1,length(BRisingEdges)); %label for B rising is 3
-edgesCell{4}=BFallingEdges;
-edgesCellLabels{4}=4*ones(1,length(BFallingEdges)); %label for B falling is 4
-
-% what the next edge must be to count A as leading, based on the table
-% above
-leadingConditions{1}=3;
-leadingConditions{2}=4;
-leadingConditions{3}=[2; 4];
-leadingConditions{4}=[1; 3];
-
-% loop through and assign leading vs lagging for all edge types
-parfor iEdgeType=1:length(edgesCell)
-    
-    %get list of all edges that is not the current edge type
-    allEdges=cat(2,edgesCell{setdiff(1:length(edgesCell),iEdgeType)})';
-    allEdgesLabels=cat(2,edgesCellLabels{setdiff(1:length(edgesCell),iEdgeType)})';
-    
-%   Non-vectorized code just loop through all edges one by one~~~~~~~~~~~~~
-% 
-%     %go through for all edges of this edge type
-%     for iEdge=1:length(edgesCell{iEdgeType})
-%         %see if the next edge matches the condition for A to be leading
-%         if any(allEdgesLabels(min(find(allEdges>edgesCell{iEdgeType}(iEdge))))==leadingConditions{iEdgeType})
-%             leadingOrLagging{iEdgeType}(iEdge)=1; %use 1 for A leading
-%         else
-%             leadingOrLagging{iEdgeType}(iEdge)=0; %use 0 for A lagging
-%         end
-%     end
-%   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~    
-    
-    %divide into blocks for vectorization to make it faster (about 2x)
-    blockSize=100; %increasing it by more doesn't seem to make it any faster
-    
-    %we want to get nextEdgeType, a vector listing the type of the next
-    %edge for all the edges in the current edge type.
-    nextEdgeType=zeros(1,length(edgesCell{iEdgeType}));
-    for iBlock=1:ceil(length(edgesCell{iEdgeType})/blockSize)
-        %get the block
-        edgeBlock=edgesCell{iEdgeType}(1+(iBlock-1)*blockSize:min(iBlock*blockSize,length(edgesCell{iEdgeType})));
-        %make matrices
-        mat_AllEdges=repmat(int32(allEdges),1,size(edgeBlock,2));
-        mat_blockEdges=repmat(int32(edgeBlock),size(allEdges,1),1);
-        
-        %find the difference between each of the edges in the block and all
-        %of the edges of different types
-        offset=mat_AllEdges-mat_blockEdges;
-        
-        %minimum of the (positive) difference is the closest next edge
-        offset(offset<=0)=max(max(offset));
-        [~,nextEdgeInd]=min(offset);
-        
-        %put the results of this block into nextEdgeType variable
-        nextEdgeType(1+(iBlock-1)*blockSize:min(iBlock*blockSize,length(edgesCell{iEdgeType})))=allEdgesLabels(nextEdgeInd);
-    end
-    
-    %now that we have the type of the next edge, use it to determine if the
-    %current edges is A leading or A lagging
-    leadingOrLagging{iEdgeType}=zeros(1,length(edgesCell{iEdgeType})); %use 0 for A lagging
-    for iCondition=1:length(leadingConditions{iEdgeType}) %for any of the next edge types (if there are multiple)
-        leadingOrLagging{iEdgeType}... %if it matches the condition, set to 1 (use 1 for A leading)
-            (nextEdgeType==repmat(leadingConditions{iEdgeType}(iCondition),1,length(nextEdgeType)))=1;
-    end
-    
-    leadingOrLagging{iEdgeType}=logical(leadingOrLagging{iEdgeType});
-end
+% Assign each edge to either a leading or lagging edge based on the above
+% rules:
+leadingOrLagging{1}=Bvoltage(ARisingEdges)<thresh; %Rising A's leading if B is low
+leadingOrLagging{2}=Bvoltage(AFallingEdges)>=thresh; %Falling A's are the opposite
+leadingOrLagging{3}=Avoltage(BRisingEdges)>=thresh; %Continue following rules for rising B's
+leadingOrLagging{4}=Avoltage(BFallingEdges)<thresh; %and falling B's
 
 % Next, put 1 or -1 at edge times (which edges depends on the mode, and the
 % sign of the 1 depends on positiveIsALeading)
@@ -193,14 +121,14 @@ switch mode
         
     case 4
         %increase and decrease on all edges of A and B
-        countChanges(ARisingEdges(leadingOrLagging{1}))=1*dontFlipSign;
-        countChanges(ARisingEdges(~leadingOrLagging{1}))=-1*dontFlipSign;
-        countChanges(AFallingEdges(leadingOrLagging{2}))=1*dontFlipSign;
-        countChanges(AFallingEdges(~leadingOrLagging{2}))=-1*dontFlipSign;
-        countChanges(BRisingEdges(leadingOrLagging{3}))=1*dontFlipSign;
-        countChanges(BRisingEdges(~leadingOrLagging{3}))=-1*dontFlipSign;
-        countChanges(BFallingEdges(leadingOrLagging{4}))=1*dontFlipSign;
-        countChanges(BFallingEdges(~leadingOrLagging{4}))=-1*dontFlipSign;
+        countChanges(ARisingEdges(logical(leadingOrLagging{1})))=1*dontFlipSign;
+        countChanges(ARisingEdges(logical(~leadingOrLagging{1})))=-1*dontFlipSign;
+        countChanges(AFallingEdges(logical(leadingOrLagging{2})))=1*dontFlipSign;
+        countChanges(AFallingEdges(logical(~leadingOrLagging{2})))=-1*dontFlipSign;
+        countChanges(BRisingEdges(logical(leadingOrLagging{3})))=1*dontFlipSign;
+        countChanges(BRisingEdges(logical(~leadingOrLagging{3})))=-1*dontFlipSign;
+        countChanges(BFallingEdges(logical(leadingOrLagging{4})))=1*dontFlipSign;
+        countChanges(BFallingEdges(logical(~leadingOrLagging{4})))=-1*dontFlipSign;
 end
 
 % use cumsum to add up the counts
