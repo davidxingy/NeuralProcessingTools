@@ -92,7 +92,7 @@ for iBlock = 1:length(dataBlocks)
         (abs(data(:,3:end-2)-data(:,4:end-1)))<=1&...
         (abs(data(:,4:end-1)-data(:,5:end)))<=1;
     
-    dropped_sig=find(sum(chan_diffs)==96);
+    dropped_sig=int32(find(sum(chan_diffs)==96));
     clear chan_diffs
     
     % Define what is tolerable for data analysis (could be different depending
@@ -122,7 +122,7 @@ for iBlock = 1:length(dataBlocks)
     
     processed_data{iBlock}=int32(data);
 
-    jumpThresh=1e4; %these jumps are very large
+    jumpThresh=1.5e4; %these jumps are very large
     fixRailJumpByPairs=false;
     
     for iChan=1:size(data,1)
@@ -270,12 +270,14 @@ for iBlock = 1:length(dataBlocks)
             %everything after the jump back,) however this method may
             %result in some offsets
             
-            %see if the first point is a jump
+            %Shift everything in this block to the last point of the last
+            %block, since things may have been offset (and the offset could
+            %be small, so it might slip through the jump threshold)
             if iBlock~=1
                 initialJumpAmount=int32(data(iChan,1))-processed_data{iBlock-1}(iChan,end);
-                if initialJumpAmount>jumpThresh
+                if initialJumpAmount>0
                     jumpUpInds=[1 jumpUpInds];
-                elseif -1*initialJumpAmount>jumpThresh
+                elseif initialJumpAmount<0
                     jumpDownInds=[1 jumpDownInds];
                 end
             end
@@ -396,7 +398,7 @@ for iBlock = 1:length(dataBlocks)
             
             %combine artifacts derrived from large drops and rises (add 1 due to
             %offset by one from diff, and add the window offset)
-            artifact_inds{whichchan}{iWindow}=unique(sort([drop_inds+1 rise_inds+1])')'+windowSize*(iWindow-1);
+            artifact_inds{whichchan}{iWindow}=uint32(unique(sort([drop_inds+1 rise_inds+1])')'+windowSize*(iWindow-1));
             
             %false artifacts are ones that didn't get rejected by both runs
             nonartifact_inds=unique(sort([non_drop_inds+1 non_rise_inds+1]))+windowSize*(iWindow-1);
@@ -421,7 +423,7 @@ for iBlock = 1:length(dataBlocks)
         %combine all the windows
         artifact_inds{whichchan}=[artifact_inds{whichchan}{:}];
         false_artifact_inds{whichchan}=[false_artifact_inds{whichchan}{:}];
-        artifacts_intol{whichchan}=[artifacts_intol{whichchan}{:}];
+        artifacts_intol{whichchan}=uint32([artifacts_intol{whichchan}{:}]);
     end
     
     % Flatline analysis (different for each channel, unsure what the origin is)=========================
@@ -459,7 +461,7 @@ for iBlock = 1:length(dataBlocks)
         
         % first combine flatlines and switching artifacts
         artifacts_merge=...
-            unique([flatlines_intol{whichchan} dropped_sig_intol artifact_inds{whichchan}]);
+            unique([flatLineInds{whichchan} dropped_sig artifact_inds{whichchan}]);
         
         % if artifacts are closely spaced together (less than 20 samples) consider
         % it all artifact (for when there's bunch of switching)
@@ -538,8 +540,9 @@ function [intolerable_samples]=find_intolerable(badsamples, merge_spacing, toler
 bad_sig=zeros(1,nSig);
 bad_sig(badsamples)=1;
 
+intolerable_samples=uint32([]);
+
 if isempty(badsamples)
-    intolerable_samples=[];
     return
 end
 
@@ -555,7 +558,6 @@ if all(bad_sig)
     return
 elseif ~any(bad_sig)
     %no bad periods
-    intolerable_samples=[];
     return
 end
 
@@ -589,7 +591,7 @@ function [isartifact, artifact_inds, nonartifact_inds, artifact_waveforms, non_a
     confirm_artifact(signal, diffs, jump, jump_opposite, chan, plot_waveforms)
 
 isartifact=[];
-artifact_inds=[];
+artifact_inds=uint32([]);
 artifact_waveforms={};
 non_artifact_waveforms={};
 
@@ -741,7 +743,7 @@ nonartifact_inds=cat(2,nonartifact_inds_cell{:});
 
 function [flatInds, flatLengths]=getFlatLengths(signal)
 flatLength=0;
-flatLengths=[]; flatInds=[];
+flatLengths=[]; flatInds=uint32([]);
 for iSignal=1:length(signal)-1
     if (signal(iSignal)==signal(iSignal+1))
         flatLength=flatLength+1;
