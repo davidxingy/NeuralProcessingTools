@@ -64,23 +64,12 @@ end
 
 % get the list of tone names
 toneNames=unique(toneTypeEvents(:,1));
+autoThreshTones={};
 
 % calc thresholds if not manually given
 if isempty(thresholds)
-    % go through each type of tone
-    for iTone=1:length(toneNames)
-        %get the max value of the 100 ms before the event for all the
-        %events
-        toneTimes=[toneTypeEvents{strcmp(toneTypeEvents, toneNames{iTone}),2}];
-        toneMaxValues=[];
-        for iEvent=1:length(toneTimes)
-            toneMaxValues(iEvent)=max(micSignal(max(1,toneTimes(iEvent)-3000):toneTimes(iEvent)));
-        end
-        
-        %use 1.02x the 75th percentile of all those values as the threshold
-        %since some of them may have high noise before the tone
-        thresholds.(toneNames{iTone})=prctile(toneMaxValues,75)*1.02;
-    end
+    %all the thresholds needs to be auto calculated
+    autoThreshTones=toneNames;
 else
     %check that the threshold names match the tone names in toneTypeEvents
     toneThreshNames=fieldnames(thresholds);
@@ -88,7 +77,28 @@ else
         if ~any(strcmpi(toneThreshNames,toneNames{iName}))
             error('Field names in manual thresholds input must match with the names in toneTypeEvents!')
         end
+        
+        %if the threshold is empty for any of the tone names, calculated the
+        %threshold automatically
+        if isempty(thresholds.(toneNames{iName}))
+            autoThreshTones(end+1)=toneNames(iName);
+        end
     end
+end
+
+% go through each type of tone that needs auto-thresholding
+for iTone=1:length(autoThreshTones)
+    %get the max value of the 100 ms before the event for all the
+    %events
+    toneTimes=[toneTypeEvents{strcmp(toneTypeEvents, autoThreshTones{iTone}),2}];
+    toneMaxValues=[];
+    for iEvent=1:length(toneTimes)
+        toneMaxValues(iEvent)=max(micSignal(max(1,toneTimes(iEvent)-3000):toneTimes(iEvent)));
+    end
+    
+    %use 1.02x the 75th percentile of all those values as the threshold
+    %since some of them may have high noise before the tone
+    thresholds.(autoThreshTones{iTone})=prctile(toneMaxValues,75)*1.02;
 end
 
 % go through each type of tone
