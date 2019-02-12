@@ -342,7 +342,7 @@ for iBlock = 1:length(dataBlocks)
         
         %split into windows of at least 1000 samples (up to 1999 if
         %there's lots of samples left over)
-        windowSize=5000;
+        windowSize=1000;
         nWindows=floor(size(data,2)/windowSize);
         
         for iWindow=1:nWindows
