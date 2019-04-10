@@ -557,7 +557,7 @@ for whichbadsample=2:length(badsamples)
 end
 
 if all(bad_sig)
-    %the whole trial is all bad
+    %the whole block is all bad
     intolerable_samples=find(bad_sig);
     return
 elseif ~any(bad_sig)
@@ -568,7 +568,7 @@ end
 % find bad period starts and stops
 bad_periods=find(bad_sig(2:end)~=bad_sig(1:end-1));
 
-% check that trial doesn't start or stop as bad (since that will mess with
+% check that block doesn't start or stop as bad (since that will mess with
 % my algorithm for finding time blocks)
 if (bad_sig(bad_periods(1))==1)
     bad_periods=[1 bad_periods];
