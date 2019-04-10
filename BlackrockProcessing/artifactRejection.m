@@ -1,5 +1,5 @@
 function [processed_data, dropped_sig, dropped_sig_intol, artifact_inds, artifacts_intol, flatLineInds, flatlines_intol, noiseLevel]=artifactRejection(chan_data, maxNumSamples)
-% [processed_data, dropped_sig, dropped_sig_intol, artifact_inds, artifacts_intol, flatLineInds, flatlines_intol]=artifact_rejection(chan_data, [maxNumSamples])
+% [processed_data, dropped_sig, dropped_sig_intol, artifact_inds, artifacts_intol, flatLineInds, flatlines_intol, noiseLevel]=artifact_rejection(chan_data, [maxNumSamples])
 %
 % chan_data is the NxM matrix contianing the M-sample signal for N channels
 % maxNumSamples is an optional input parameter. For very large input data
@@ -70,7 +70,7 @@ for iBlock = 1:length(dataBlocks)
     
     data = dataBlocks{iBlock};
     if (isDivided)
-        fprintf('Running on Block %i',iBlock);
+        fprintf('Running on Block %i \n',iBlock);
     end
     
     % dropped signal analysis (bad data across all channels)=======================================
@@ -86,7 +86,7 @@ for iBlock = 1:length(dataBlocks)
     % by chance all electrodes happen to have the same signal for 4 data
     % points)
     
-    fprintf('\n Finding dropped signals...')
+    fprintf('Finding dropped signals... \n')
     chan_diffs=(abs(data(:,1:end-4)-data(:,2:end-3)))<=1&...
         (abs(data(:,2:end-3)-data(:,3:end-2)))<=1&...
         (abs(data(:,3:end-2)-data(:,4:end-1)))<=1&...
@@ -118,7 +118,7 @@ for iBlock = 1:length(dataBlocks)
     
     %First fix any issues with voltages hitting the limits and flipping to opposite rails==========================================
     
-    fprintf('\n Cleaning up rail flips')
+    fprintf('Cleaning up rail flips')
     
     processed_data{iBlock}=int32(data);
 
@@ -315,6 +315,8 @@ for iBlock = 1:length(dataBlocks)
     
     end
     
+    fprintf('\n')
+    
     
     % Receiver artifact analysis (different for each channel)=======================================
     
@@ -327,7 +329,7 @@ for iBlock = 1:length(dataBlocks)
     % data into windows of 30 000 samples and defining the cutoff as the
     % 99.9th percentile of the data for each window.
     
-    fprintf('\n Finding artifacts')
+    fprintf('Finding artifacts')
     
 %     cutoff=200;
     
@@ -426,6 +428,8 @@ for iBlock = 1:length(dataBlocks)
         artifacts_intol{whichchan}=uint32([artifacts_intol{whichchan}{:}]);
     end
     
+    fprintf('\n')
+    
     % Flatline analysis (different for each channel, unsure what the origin is)=========================
     
     % Looked at distribution of the number of constant consecutive points,
@@ -435,7 +439,7 @@ for iBlock = 1:length(dataBlocks)
     % Won't alter flatline signals, since not much to do to alleviate them, but
     % will let the user be aware of where these happen.
     
-    fprintf('\n Finding flatlines')
+    fprintf('Finding flatlines')
     
     for whichchan=1:size(data,1)
         fprintf('.')
@@ -450,11 +454,11 @@ for iBlock = 1:length(dataBlocks)
         [flatlines_intol{whichchan}]=...
             find_intolerable(flatLineInds{whichchan}, artifact_spacing, artifact_limit,length(signal));
     end
-    
+    fprintf('\n')
     
     %Now, try to alleviate artifacts with linear interpolation==========================================
     
-    fprintf('\n Cleaning up signal')
+    fprintf('Cleaning up signal')
         
     for whichchan=1:size(data,1)
         fprintf('.')
