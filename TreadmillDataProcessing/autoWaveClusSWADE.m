@@ -5,9 +5,9 @@ function autoWaveClusSWADE(contDataFile, prevSpikesDataFile, savePlotFile)
 % of this function is to run the template matching automatically, assuming
 % that the templates have already been generated manually, and the new data
 % that is being run on is from the same recording session as the manually
-% templated data. (Ex, manual wave_clus/Carlos SWADE sorting on trial 1 of
+% templated data. (Ex, manual wave_clus/Carlos SWADE sorting on block 1 of
 % a session, then running this automatic sorting code on the remaining
-% trials).
+% blocks).
 % Spike detection will be done with wave_clus's Get_spikes() function,
 % while the sorting will be done using Carlos's SWADE algorithm. 
 % 

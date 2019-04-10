@@ -11,15 +11,15 @@ function neuronInfo = concatenateWaveClusSpikes(folder,filenameStructure,varargi
 % folder -              String containing the path to folder containing the
 %                       times_....mat files that were the output of
 %                       WaveClus sorting. Make sure all your channels and
-%                       trials are contained in this folder.
+%                       blocks are contained in this folder.
 % 
 % filenameStructure -   String that defines the formatting of the
 %                       times_...mat filenames. Put a '%c' where the
-%                       channel number should be and a '%t' where the trial
+%                       channel number should be and a '%b' where the block
 %                       number should be. Ex:
-%                       'times_blahblah_Chan%c_Trial%t.mat', will look for
+%                       'times_blahblah_Chan%c_Block%b.mat', will look for
 %                       all files in the folder that follow that filename
-%                       convention, such as times_blahblah_Chan96_Trial1.mat
+%                       convention, such as times_blahblah_Chan96_Block1.mat
 % 
 % SNRCutoff -           Optional. If given, will only keep units that pass
 %                       this SNR cutoff. SNR is calculated as the amplitude
@@ -35,17 +35,17 @@ function neuronInfo = concatenateWaveClusSpikes(folder,filenameStructure,varargi
 %                       SNR: signal to noise ration of the neuron, as
 %                       defined in the description above in SNRCutoff
 %                       Waveform: average waveform the neuron (across all
-%                       the spikes of all the trials)
+%                       the spikes of all the blocks)
 %                       WaveformSTD: the standard deviation at each point
 %                       of the waveform (across all the spikes of all the
-%                       trials)
+%                       blocks)
 %                       OriginChannel: The waveclus file channel that the
 %                       neuron came from.
 %                       OriginUnitNum: The unit label number that the
 %                       neuron was assigned to in the waveclus file
 %                       Timestamps: a cell array containing the timestamps
 %                       (in whatever units that was output by WaveClus),
-%                       with each cell corresponding to a trial.
+%                       with each cell corresponding to a block.
 % 
 % David Xing 4/10/2019
 
@@ -75,31 +75,31 @@ allFileNames = string({allFileNames.name})';
 chanNumInd = strfind(filenameStructure,'%c');
 
 % get the trail # location in the filename string
-trialNumInd = strfind(filenameStructure,'%t');
+blockNumInd = strfind(filenameStructure,'%b');
 
 % make sure at least channel # location was found
 if isempty(chanNumInd)
     error('filenameStructure must containt ''%c'' to indicate where the channel num is!');
-elseif isempty(trialNumInd)
-    warning('''%t'' not found in filenameStructure, will assume there is only 1 trial');
+elseif isempty(blockNumInd)
+    warning('''%b'' not found in filenameStructure, will assume there is only 1 block');
 end
 
 % change the filename structure to format that can be used by sscanf
 filenameStructureMod = filenameStructure;
 filenameStructureMod(chanNumInd+1) = 'u';
-filenameStructureMod(trialNumInd+1) = 'u';
+filenameStructureMod(blockNumInd+1) = 'u';
 
-% determine whether the trial # comes first or the channel #
-if isempty(trialNumInd) || chanNumInd < trialNumInd
+% determine whether the block # comes first or the channel #
+if isempty(blockNumInd) || chanNumInd < blockNumInd
     chanIndFirst = true;
 else
     chanIndFirst = false;
 end
 
-% now go through all the files and get the channel numbers and trials of
+% now go through all the files and get the channel numbers and blocks of
 % all the files that match the format
 chanList = [];
-trialList = [];
+blockList = [];
 fileIndList = [];
 for iFile = 1:length(allFileNames)
     
@@ -111,51 +111,51 @@ for iFile = 1:length(allFileNames)
         continue
     end
     
-    %template found, assign channel and trial number
-    if isempty(trialNumInd)
+    %template found, assign channel and block number
+    if isempty(blockNumInd)
         chanNum = foundInds;
-        trialNum = 1;    
+        blockNum = 1;    
     elseif chanIndFirst
         chanNum = foundInds(1);
-        trialNum = foundInds(2);
+        blockNum = foundInds(2);
     else
-        trialNum = foundInds(1);
+        blockNum = foundInds(1);
         chanNum = foundInds(2);
     end
     
     chanList(end+1) = chanNum;
-    trialList(end+1) = trialNum;
+    blockList(end+1) = blockNum;
     fileIndList(end+1) = iFile;
     
 end
 
 % get list of all the unique channel numbers that are contained in the
 % files
-if isempty(trialNumInd)
-    allTrials = 1;
+if isempty(blockNumInd)
+    allBlocks = 1;
 else
-    allTrials = unique(trialList);
+    allBlocks = unique(blockList);
 end
 
 % get list of all the unique channel numbers that are contained in the
 % files
 allChans = unique(chanList);
 
-% and go through each channel to extract its neurons (for all trials)
+% and go through each channel to extract its neurons (for all blocks)
 iNeuron = 1; %for keeping track of the number of neurons we are saving
 for iChan = 1:length(allChans)
     
     dontUseChan = false;
 
-    %go through each trial and load in the data
-    for iTrial = 1:length(allTrials)
+    %go through each block and load in the data
+    for iBlock = 1:length(allBlocks)
         
-        filenameInd = find(chanList==allChans(iChan) & trialList==allTrials(iTrial));
+        filenameInd = find(chanList==allChans(iChan) & blockList==allBlocks(iBlock));
         
-        %warn user if the trial wasn't found
+        %warn user if the block wasn't found
         if length(filenameInd)~=1
-            warning(['No file found for Trial %u of channel %u!' ...
-                'Will not save neurons from this channel'], allTrials(iTrial), allChans(iChan));
+            warning(['No file found for Block %u of channel %u!' ...
+                'Will not save neurons from this channel'], allBlocks(iBlock), allChans(iChan));
             dontUseChan = true;
             break;
         end
@@ -163,7 +163,7 @@ for iChan = 1:length(allChans)
         
         %load in the data from the file
         try
-            fileVars{allTrials(iTrial)} = load(fullfile(folder, ...
+            fileVars{allBlocks(iBlock)} = load(fullfile(folder, ...
                 allFileNames{fileIndList(filenameInd)}));
         catch
             warning(['Unable to load channel %u file: %s. ' ...
@@ -174,14 +174,14 @@ for iChan = 1:length(allChans)
         end
         
         %Make sure all the proper variables are in the file
-        if ~isfield(fileVars{allTrials(iTrial)},'cluster_class')
+        if ~isfield(fileVars{allBlocks(iBlock)},'cluster_class')
             warning(['File %s doesn''t have the ''cluster_class'' variable! ' ...
                 'Will not save neurons from this channel'], ...
                 allFileNames{fileIndList(filenameInd)});
             dontUseChan = true;
             break;
             
-        elseif ~isfield(fileVars{allTrials(iTrial)},'spikes')
+        elseif ~isfield(fileVars{allBlocks(iBlock)},'spikes')
             warning(['File %s doesn''t have the ''spikes'' variable! ', ...
                 'Will not save neurons from this channel'], ...
                 allFileNames{fileIndList(filenameInd)});
@@ -190,15 +190,15 @@ for iChan = 1:length(allChans)
         end
 
         %see how many neurons were found for this channel
-        trialUnitLabels{allTrials(iTrial)} = unique(fileVars{iTrial}.cluster_class(:,1));
-        trialUnitLabels{allTrials(iTrial)}(trialUnitLabels{allTrials(iTrial)}==0) = [];
+        blockUnitLabels{allBlocks(iBlock)} = unique(fileVars{iBlock}.cluster_class(:,1));
+        blockUnitLabels{allBlocks(iBlock)}(blockUnitLabels{allBlocks(iBlock)}==0) = [];
         
-        %make sure the neuron labels are the same across trials
-        firstNonEmptyTrial = find(~cellfun(@isempty, fileVars),1);
-        if any(trialUnitLabels{allTrials(iTrial)}~=trialUnitLabels{firstNonEmptyTrial})
-            warning(['Different neuron labels found for trials %u and %u in channel %u! ' ...
-                'Will not save neurons from this channel.'], allTrials(iTrial),...
-                firstNonEmptyTrial, allChans(iChan))
+        %make sure the neuron labels are the same across blocks
+        firstNonEmptyBlock = find(~cellfun(@isempty, fileVars),1);
+        if any(blockUnitLabels{allBlocks(iBlock)}~=blockUnitLabels{firstNonEmptyBlock})
+            warning(['Different neuron labels found for blocks %u and %u in channel %u! ' ...
+                'Will not save neurons from this channel.'], allBlocks(iBlock),...
+                firstNonEmptyBlock, allChans(iChan))
             dontUseChan = true;
             break
         end
@@ -210,25 +210,25 @@ for iChan = 1:length(allChans)
     end
 
     %if code reached this point, that means all the neuron labels were
-    %consistent across trials
-    firstNonEmptyTrial = find(~cellfun(@isempty, fileVars),1);
-    unitLabels = trialUnitLabels{firstNonEmptyTrial};
+    %consistent across blocks
+    firstNonEmptyBlock = find(~cellfun(@isempty, fileVars),1);
+    unitLabels = blockUnitLabels{firstNonEmptyBlock};
 
     %now go through each putative neuron
     for iUnit = 1:length(unitLabels)
         
-        %calculate the SNR for each trial
-        for iTrial = 1:length(allTrials)
+        %calculate the SNR for each block
+        for iBlock = 1:length(allBlocks)
             
-            waveforms{iTrial} = fileVars{allTrials(iTrial)}.spikes(...
-                fileVars{allTrials(iTrial)}.cluster_class(:,1)==unitLabels(iUnit),:);
-            noise = waveforms{iTrial}(:,1:5);
-            SNR(iTrial) = (max(nanmean(waveforms{iTrial}))-...
-                min(nanmean(waveforms{iTrial})))/(3*nanstd(noise(:)));
+            waveforms{iBlock} = fileVars{allBlocks(iBlock)}.spikes(...
+                fileVars{allBlocks(iBlock)}.cluster_class(:,1)==unitLabels(iUnit),:);
+            noise = waveforms{iBlock}(:,1:5);
+            SNR(iBlock) = (max(nanmean(waveforms{iBlock}))-...
+                min(nanmean(waveforms{iBlock})))/(3*nanstd(noise(:)));
             
         end
         
-        %if the average SNR across trials passes threshold, keep neuron
+        %if the average SNR across blocks passes threshold, keep neuron
         if mean(SNR)<SNRCutoff
             continue
         else
@@ -240,11 +240,11 @@ for iChan = 1:length(allChans)
         end
         
         %now finally, get the timestamps
-        for iTrial = 1:length(allTrials)
-            timestamps = fileVars{allTrials(iTrial)}.cluster_class(...
-                fileVars{allTrials(iTrial)}.cluster_class(:,1)==unitLabels(iUnit),2);
+        for iBlock = 1:length(allBlocks)
+            timestamps = fileVars{allBlocks(iBlock)}.cluster_class(...
+                fileVars{allBlocks(iBlock)}.cluster_class(:,1)==unitLabels(iUnit),2);
             
-            neuronInfo(iNeuron).Timestamps{allTrials(iTrial)} = timestamps;
+            neuronInfo(iNeuron).Timestamps{allBlocks(iBlock)} = timestamps;
         end
         
         %increment neuron counter
