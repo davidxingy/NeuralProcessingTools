@@ -162,6 +162,8 @@ simiTriggers=threshCrossings(postStartTrig:preEndTrig);
 
 %make plots for visual verification (histogram of trigger diffs)\
 if ~isempty(plotFileName)
+    
+    %first plot histogram
     nFrames=length(simiTriggers);
     plot_h=figure('Units','pixels','OuterPosition',...
         [100, 100, 1000, 700],'Visible','off');
@@ -173,7 +175,22 @@ if ~isempty(plotFileName)
     box off
     
     %save
-    saveas(plot_h,plotFileName,'png');
+    saveas(plot_h,[plotFileName '_Histogram'],'png');
+    close(plot_h)
+    
+    %next plot the actual voltage values with detected triggers
+    plot_h=figure('Units','pixels','OuterPosition',...
+        [100, 100, 1000, 700],'Visible','off');
+    plot(trigSig);
+    hold on
+    plot(simiTriggers, trigSig(simiTriggers) ,'*')
+    xlabel('Sample')
+    ylabel('Simi Trigger Signal')
+    set(gca,'FontSize',14);
+    box off
+    
+    %save
+    saveas(plot_h,[plotFileName '_Signal'],'png');
     close(plot_h)
 end
 
