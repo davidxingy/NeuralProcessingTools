@@ -23,6 +23,10 @@ fig_h=figure();
 ax(1)=subplot(2,1,1);
 ax(2)=subplot(2,1,2);
 
+if size(plotData,1)==1 && size(plotData,2)>1
+    plotData=plotData';
+end
+
 % plot normal data
 axes(ax(1))
 if isempty(x)
@@ -34,7 +38,7 @@ end
 % plot differences
 axes(ax(2))
 
-diffs=[NaN(1,size(plotData,2)); diff(plotData,1,1)];
+diffs=[NaN(1,size(plotData,2)); diff(double(plotData),1,1)];
 if isempty(x)
     plot(diffs,varargin{:})
 else
