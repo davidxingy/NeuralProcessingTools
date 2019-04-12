@@ -123,7 +123,7 @@ for iBlock = 1:length(dataBlocks)
     processed_data{iBlock}=int32(data);
 
     jumpThresh=1.5e4; %these jumps are very large
-    fixRailJumpByPairs=false;
+    overflowAmount=33866; %how much that was accidentally added to the value
     
     for iChan=1:size(data,1)
         fprintf('.')
@@ -132,188 +132,67 @@ for iBlock = 1:length(dataBlocks)
         jumpUpInds=sort(find(diff(processed_data{iBlock}(iChan,:))>jumpThresh))+1;
         jumpDownInds=sort(find(diff(processed_data{iBlock}(iChan,:))<-1*jumpThresh))+1;
         
-        if fixRailJumpByPairs
-            %see if the previous block ended in the middle of a segment jump
-            if iBlock~=1
-                if blockEndsInJump(iChan)
-                    %if it did, next check if there is a jump between the
-                    %beginning of this block and the end of the last block
-                    if abs(processed_data{iBlock}(iChan,1)-processed_data{iBlock-1}(iChan,end))>jumpThresh
-                        %we are still in the middle of a segment jump:
-                        %`'`'`'         |<-block divider  `'`'`'`'
-                        %      ,.,.,..,.|,.,.,,.,.,.,.,.,.,
-                        %   Last Block  |    Current block
-                        
-                        %we need to move everything from the first point up to
-                        %the first jump in this block up/down
-                        firstJumpInd=min([jumpUpInds(1) jumpDownInds(1)]);
-                        jumpAmount=diff(processed_data{iBlock}(iChan,firstJumpInd-1:firstJumpInd));
-                        processed_data{iBlock}(iChan,1:firstJumpInd-1)=...
-                            processed_data{iBlock}(iChan,1:firstJumpInd-1)+jumpAmount;
-                        
-                        %and remove the first jump from the list of jumps
-                        jumpUpInds(jumpUpInds==firstJumpInd)=[];
-                        jumpDownInds(jumpDownInds==firstJumpInd)=[];
-                        
-                    else
-                        %the segment jump just ended with the last point of the
-                        %previous block (no jump because we had already moved
-                        %everything up in the last block):
-                        %`'`'`'              |`'`'`'`''`'`'`'`'`'
-                        %      ,,.,.,.,.,.,.,| <-block divider
-                        %    Last Block      |    Current block
-                        
-                        %don't need to do anything
-                    end
-                    
-                else
-                    %Check if there is a jump between the
-                    %beginning of this block and the end of the last block
-                    if abs(processed_data{iBlock}(iChan,1)-processed_data{iBlock-1}(iChan,end))>jumpThresh
-                        %if there is a jump, the the very first point is the
-                        %start of a segement shifting:
-                        %`'`'`'`'`'`'`'`'| <-block divider     `'`'`'`'`'
-                        %                |.,.,.,.,.,.,,.,.,.,.,
-                        %   Last Block   |    Current block
-                        
-                        %we need to add the very first index to the list of
-                        %jumps
-                        if processed_data{iBlock}(iChan,1)>processed_data{iBlock-1}(iChan,end)
-                            jumpUpInds=[1 jumpUpInds];
-                        else
-                            jumpDownInds=[1 jumpDownInds];
-                        end
-                        
-                    else
-                        %no segments shifts
-                        %`'`'`'`'`'`'`'`'|`'`'`'`'`'`'`'`'`'`'`'`
-                        %                | <-block divider
-                        %   Last Block   |    Current block
-                        
-                        %don't need to do anything
-                    end
-                    
-                end
+        %Shift everything in this block to the last point of the last
+        %block, since things may have been offset
+        if iBlock~=1
+            initialJumpAmount=int32(data(iChan,1))-processed_data{iBlock-1}(iChan,end);
+            if initialJumpAmount>0 && abs(initialJumpAmount)>jumpThresh
+                jumpUpInds=[1 jumpUpInds];
+            elseif initialJumpAmount<0 && abs(initialJumpAmount)>jumpThresh
+                jumpDownInds=[1 jumpDownInds];
             end
-            
-            %jump times should always be in pairs, or at most 1 more of one of
-            %them
-            if abs(length(jumpUpInds)-length(jumpDownInds))>1
-                warning('Number of upwards rail jumps does not equal the number of downwards rail jumps!')
-            end
-            
-            %no jumps, don't need to do anything
-            if isempty(jumpUpInds) && isempty(jumpDownInds)
-                continue
-            end
-            
-            %now, get pairs of up/down or down/up
-            if isempty(jumpUpInds)
-                %no up jumps, should be only one down jump
-                initialJumpInds=jumpDownInds;
-                returningJumpInds=[];
-            elseif isempty(jumpDownInds)
-                %no down jumps, should be only one up jump
-                initialJumpInds=jumpUpInds;
-                returningJumpInds=[];
-            else
-                
-                allJumpInds=sort([jumpUpInds jumpDownInds]);
-                
-                isPair=false;
-                initialJumpInds=[];
-                returningJumpInds=[];
-                for iJump=1:length(allJumpInds)
-                    
-                    if isPair
-                        %second part of pair, go to next jump to find new pair
-                        isPair=false;
-                        continue
-                    end
-                    
-                    %if we're at the last jump, and it isn't part of a pair,
-                    %then we've ended the block in the middle of a jump
-                    if iJump==length(allJumpInds)
-                        initialJumpInds=[initialJumpInds allJumpInds(iJump)];
-                        
-                        continue
-                    end
-                    
-                    %the next closest jump should be a jump in the opposite
-                    %direction to complete the pair
-                    if any(allJumpInds(iJump)==jumpUpInds)
-                        if all(allJumpInds(iJump+1)~=jumpDownInds)
-                            warning('An upwards Jump isn''t followed by a downwards jump!')
-                            continue
-                        end
-                    else
-                        if all(allJumpInds(iJump+1)~=jumpUpInds)
-                            warning('A downwards Jump isn''t followed by am upwards jump!')
-                            continue
-                        end
-                    end
-                    
-                    initialJumpInds=[initialJumpInds allJumpInds(iJump)];
-                    returningJumpInds=[returningJumpInds allJumpInds(iJump+1)];
-                    isPair=true;
-                end
-                
-            end
-            
-            %now go and fix all the jumped segments
-            [processed_data{iBlock}(iChan,:), blockEndsInJump(iChan)]=fixJumpSegments(...
-                processed_data{iBlock}(iChan,:), initialJumpInds, returningJumpInds);
-            
-        else
+        end
+        
+        %now go through each jump and remove it by shifting everything after
+        %the jump by the known overflow amount
+        for iJump=1:length(jumpUpInds)
 
-            %do the fast and easy way of fixing jumps (just shift
-            %everything after the jump back,) however this method may
-            %result in some offsets
-            
-            %Shift everything in this block to the last point of the last
-            %block, since things may have been offset (and the offset could
-            %be small, so it might slip through the jump threshold)
-            if iBlock~=1
-                initialJumpAmount=int32(data(iChan,1))-processed_data{iBlock-1}(iChan,end);
-                if initialJumpAmount>0
-                    jumpUpInds=[1 jumpUpInds];
-                elseif initialJumpAmount<0
-                    jumpDownInds=[1 jumpDownInds];
-                end
-            end
-            
-            %now go through each jump and remove it by shifting everything after
-            %the jump by the jump amount
-            for iJump=1:length(jumpUpInds)
-                
-                %see how big the jump is
-                if jumpUpInds(iJump)==1
-                    jumpAmount=initialJumpAmount;
-                else
-                    jumpAmount=diff(int32(data(iChan,jumpUpInds(iJump)-1:jumpUpInds(iJump))));
-                end
-                
-                %shift everything after the jump by the opposite amount
-                processed_data{iBlock}(iChan,jumpUpInds(iJump):end)=processed_data{iBlock}(iChan,jumpUpInds(iJump):end)-jumpAmount;
-                
-            end
-            
-            %same for downward jumps
-            for iJump=1:length(jumpDownInds)
-                
-                if jumpDownInds(iJump)==1
-                    jumpAmount=initialJumpAmount;
-                else
-                    jumpAmount=diff(int32(data(iChan,jumpDownInds(iJump)-1:jumpDownInds(iJump))));
-                end
-                
-                processed_data{iBlock}(iChan,jumpDownInds(iJump):end)=processed_data{iBlock}(iChan,jumpDownInds(iJump):end)-jumpAmount;
-                
-            end
+            processed_data{iBlock}(iChan,jumpUpInds(iJump):end)=...
+                processed_data{iBlock}(iChan,jumpUpInds(iJump):end)-overflowAmount;
             
         end
-    
+        
+        %same for downward jumps
+        for iJump=1:length(jumpDownInds)
+            
+            processed_data{iBlock}(iChan,jumpDownInds(iJump):end)=...
+                processed_data{iBlock}(iChan,jumpDownInds(iJump):end)+overflowAmount;
+            
+        end
+        
+        
+        %now do second pass, sometimes might've missed a jump, or some jumps
+        %weren't really jumps, in any case, the baseline value shouldn't differ
+        %too much from the unprocessed data for too long.
+        
+        maxDiscrepLength=5*30000; %max discrepency time should be 5 seconds
+        
+        
+        %find where the post-jumpfixed data and the unprocessed data differ
+        offsets=processed_data{iBlock}(iChan,:)-int32(data(iChan,:));
+        
+        %find where offsets are constant
+        [constSegInds constSegLengths]=findConstants(double(offsets));
+        
+        %don't care about 0 constants
+        constSegLengths(offsets(constSegInds)==0)=[];
+        constSegInds(offsets(constSegInds)==0)=[];
+        
+        %only see if offsets are constant for longer than the max amount
+        constSegInds(constSegLengths<maxDiscrepLength)=[];
+        constSegLengths(constSegLengths<maxDiscrepLength)=[];
+        
+        %for these offsets, remove them by shifting them back up/down by the offset amount
+        for iOffset=1:length(constSegInds)
+            processed_data{iBlock}(iChan,...
+                constSegInds(iOffset):constSegInds(iOffset)+constSegLengths(iOffset)-1)=...
+                processed_data{iBlock}(iChan,...
+                constSegInds(iOffset):constSegInds(iOffset)+constSegLengths(iOffset)-1)-...
+                offsets(constSegInds(iOffset));
+        end
+        
     end
+
     
     fprintf('\n')
     
