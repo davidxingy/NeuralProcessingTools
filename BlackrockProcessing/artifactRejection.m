@@ -166,13 +166,37 @@ for iBlock = 1:length(dataBlocks)
         %too much from the unprocessed data for too long.
         
         maxDiscrepLength=5*30000; %max discrepency time should be 5 seconds
-        
+        maxRailFlipBlockLength=10000;
         
         %find where the post-jumpfixed data and the unprocessed data differ
         offsets=processed_data{iBlock}(iChan,:)-int32(data(iChan,:));
         
         %find where offsets are constant
         [constSegInds constSegLengths]=findConstants(double(offsets));
+        
+        %if segments are shorter than then the maxRailFlipBlockLength, and
+        %if both segments surrounding the short segment have the same
+        %offset value, just merge all of them into 1 offset value (to
+        %remove any short changes in offset due to fixing the rail flips)
+        mergeSegs=[];
+        iSeg=1;
+        while iSeg<length(constSegInds)
+            while true
+                sameOffs=find(offsets(constSegInds(iSeg))==offsets(constSegInds));
+                nextOff=sameOffs(find(sameOffs>iSeg,1));
+                if isempty(nextOff)
+                    break;
+                elseif (constSegInds(nextOff)-constSegLengths(iSeg)-constSegInds(iSeg))<maxRailFlipBlockLength
+                    rmSegs=find(constSegInds>constSegInds(iSeg) & constSegInds<=constSegInds(nextOff));
+                    constSegLengths(iSeg)=constSegInds(nextOff)+constSegLengths(nextOff)-constSegInds(iSeg);
+                    constSegInds(rmSegs)=[];
+                    constSegLengths(rmSegs)=[];
+                else
+                    break;
+                end
+            end
+            iSeg=iSeg+1;
+        end
         
         %don't care about 0 constants
         constSegLengths(offsets(constSegInds)==0)=[];
@@ -238,10 +262,12 @@ for iBlock = 1:length(dataBlocks)
             signal=processed_data{iBlock}(whichchan,startInd:endInd);
             diffs=diff(signal);
 
-            %get the cutoff (7x standard deviation, where std is calculated
-            %from the 98th percetile of data to remove outliers).
+            %get the cutoff (15x the the 98th percential of all the diffs).
             percentileCutoff=prctile(abs(diffs),98);
-            cutoff=7*std(double(diffs(diffs<percentileCutoff & diffs>-1*percentileCutoff)));
+            cutoff=15*max(abs(double(diffs(diffs<percentileCutoff & diffs>-1*percentileCutoff))));
+            if isempty(cutoff)
+                cutoff=inf;
+            end
             
             %also calculate the overall noise level (std) of the actual
             %signal, not just the diffs
