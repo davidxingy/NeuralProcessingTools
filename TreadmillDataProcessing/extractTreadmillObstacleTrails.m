@@ -1,4 +1,4 @@
-function trials = extractTreadmillObstacleTrails(continuousData, eventsData, taskType, eventNames, nPreSteps, nPostSteps)
+function trials = extractTreadmillObstacleTrails(continuousData, eventsData, taskType, eventNames, nPreSteps, nPostSteps, standingStanceLength)
 % trials = extractTreadmillObstacleTrails(continuousData, eventsData, taskType,...
 %                                           eventNames, nPreSteps, nPostSteps)
 % 
@@ -62,6 +62,7 @@ switch taskType
         %Swing normalization will assign the whole swing phase as 0-100.
         gaitNormalizeEventInds = mainEvents(:,2)-mainEvents(:,1)+1;
         gaitNormalizeEventPercentages = repmat(60,size(mainEvents,1),1);
+        usePreTrial = false;
         swingNormalizeEventInds = [mainEvents(:,2)-mainEvents(:,1)+1 mainEvents(:,3)-mainEvents(:,1)];
         swingNormalizeEventPercentages = repmat([1 100],size(mainEvents,1),1);
         
@@ -117,10 +118,11 @@ switch taskType
         trialDivisionNames = repmat({{'LimbOff'}},1,size(mainEvents,1));
         
         %Normalization:
-        %for Obstacle and Reaching, can only normalize to the "swing" phase
-        %since there is no stance phase analog
-        gaitNormalizeEventInds = NaN(size(mainEvents,1),1);
-        gaitNormalizeEventPercentages = NaN(size(mainEvents,1),1);
+        %for Obstacle and Reaching, the stance will have to come from the
+        %pre-trial data, and the amount to use will have to be user defined
+        gaitNormalizeEventInds = repmat(standingStanceLength+1, size(mainEvents,1),1);
+        gaitNormalizeEventPercentages = repmat(60, size(mainEvents,1),1);
+        usePreTrial = true;
         swingNormalizeEventInds = zeros(size(mainEvents,1),0); %empty since will just use default 0-100
         swingNormalizeEventPercentages = zeros(size(mainEvents,1),0);
                     
@@ -205,8 +207,9 @@ switch taskType
         %since there is no stance phase analog, will count just the
         %reaching phase as part of the swing (eating is considered a
         %separate movement after treat contact).
-        gaitNormalizeEventInds = NaN;
-        gaitNormalizeEventPercentages = NaN;
+        gaitNormalizeEventInds = repmat(standingStanceLength+1, size(mainEvents,1),1);
+        gaitNormalizeEventPercentages = repmat(60, size(mainEvents,1),1);
+        usePreTrial = true;
         swingNormalizeEventInds = mainEvents(:,2)-mainEvents(:,1); %treat contact will be end of phase (100%)
         swingNormalizeEventPercentages = repmat(100,size(mainEvents,1),1);
              
@@ -292,6 +295,7 @@ switch taskType
         %Swing normalization will assign the whole swing phase as 0-100.
         gaitNormalizeEventInds = mainEvents(:,2)-mainEvents(:,1)+1;
         gaitNormalizeEventPercentages = repmat(60,size(mainEvents,1),1);
+        usePreTrial = false;
         swingNormalizeEventInds = [mainEvents(:,2)-mainEvents(:,1)+1 mainEvents(:,3)-mainEvents(:,1)];
         swingNormalizeEventPercentages = repmat([1 100],size(mainEvents,1),1);
         
@@ -424,6 +428,7 @@ switch taskType
         %For normal walking trials before/after just treat as walk trials
         gaitNormalizeEventInds = [mainEvents(:,2)-mainEvents(:,1)+1 mainEvents(:,3)-mainEvents(:,1)];
         gaitNormalizeEventPercentages = repmat([60 100],size(mainEvents,1),1);
+        usePreTrial = false;
         swingNormalizeEventInds = [mainEvents(:,2)-mainEvents(:,1)+1 mainEvents(:,3)-mainEvents(:,1)];
         swingNormalizeEventPercentages = repmat([1 100],size(mainEvents,1),1);
         
@@ -455,6 +460,11 @@ for iTrial = 1:size(dataSegs,1)
     
     %normalize data if desired
     if isempty(gaitNormalizeEventInds) | ~isnan(gaitNormalizeEventInds)
+        if usePreTrial
+            dataToNormalize = [trials(iTrial).preData(:,end-(standingStanceLength-1):end) trials(iTrial).data];
+        else
+            dataToNormalize = trials(iTrial).data;
+        end
         trials(iTrial).dataGaitNormalized = timeNormalize(trials(iTrial).data,...
             gaitNormalizeEventInds(iTrial,:), gaitNormalizeEventPercentages(iTrial,:), 0:100);
     else
