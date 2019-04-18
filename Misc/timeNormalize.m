@@ -64,11 +64,11 @@ end
 
 % get the "time points" (the indices) corresponding to the desired output
 % percentages
-desiredPercentageAsInds = interp1(eventPercentages, eventInds, desiredPercentages);
+desiredPercentageAsInds = interp1(eventPercentages, eventInds, desiredPercentages, 'linear', 'extrap');
 
 % now get the data values at those time points corresponding to the desired
 % percentages
-normalizedData = interp1(1:size(data,2), data', desiredPercentageAsInds)';
+normalizedData = interp1(1:size(data,2), data', desiredPercentageAsInds, 'linear', 'extrap')';
 
 
 % 
