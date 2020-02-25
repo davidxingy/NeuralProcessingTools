@@ -184,8 +184,12 @@ nClasses=length(sorted_timestamps)+1;
 colormap=hsv(nClasses-1);
 colormap(end+1,:)=[0.2 0.2 0.2]; %rejected spikes are black
 
+% divide the row into at least 3 plots so that the aspect ratio isn't too
+% bad for the waveform plots
+nSubplotColumns = max(4, nClasses);
+
 % top row should be the raw neural time series
-subplot(3, nClasses, 1:nClasses)
+subplot(3, nSubplotColumns, 1:nSubplotColumns)
 % just plot 1 second (30k points)
 voltageData=contFileVars.data(1:30000)-nanmean(contFileVars.data(1:30000));
 plot((1:30000)/30,voltageData,'color',[0.1 0.1 0.1])
@@ -208,7 +212,7 @@ ylimMin=min(min(detectedSpikesVars.spikes(...
 % now go through all the sorted neurons, and plot spikes and histograms
 for iNeuron=1:nClasses
     %first the waveforms
-    subplot(3, nClasses, nClasses+iNeuron)
+    subplot(3, nSubplotColumns, nSubplotColumns+iNeuron)
     %get a random subset of 2000 neurons
     if iNeuron~=nClasses
         sampleInds=randperm(size(rec_waves{iNeuron},2));
@@ -252,7 +256,7 @@ for iNeuron=1:nClasses
     xlim([0 60])
     
     %next, do histograms
-    subplot(3, nClasses, 2*nClasses+iNeuron)
+    subplot(3, nSubplotColumns, 2*nSubplotColumns+iNeuron)
     %get ISIs
     if iNeuron~=nClasses
         neuronTimestamps=sorted_timestamps{iNeuron};
@@ -278,7 +282,7 @@ for iNeuron=1:nClasses
     ylabel('Count')
     
     %finally add a marker to the time series plot
-    subplot(3, nClasses, 1:nClasses)
+    subplot(3, nSubplotColumns, 1:nSubplotColumns)
     %since we're only plotting first 1s of data
     timestampInds=neuronTimestamps(neuronTimestamps<1000);
     plot(timestampInds,voltageData(round(timestampInds*30)),'*','color',colormap(iNeuron,:))
@@ -287,7 +291,7 @@ end
 
 %title
 [origFilePath, origFileName]=fileparts(contDataFile);
-t=suptitle(sprintf('%s auto sorting',origFileName));
+t=sgtitle(sprintf('%s auto sorting',origFileName));
 set(plot_h,'Visible','off');
 set(t,'Interpreter','none');
 
