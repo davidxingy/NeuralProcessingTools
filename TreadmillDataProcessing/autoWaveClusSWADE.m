@@ -291,7 +291,7 @@ end
 
 %title
 [origFilePath, origFileName]=fileparts(contDataFile);
-t=sgtitle(sprintf('%s auto sorting',origFileName));
+t=suptitle(sprintf('%s auto sorting',origFileName));
 set(plot_h,'Visible','off');
 set(t,'Interpreter','none');
 
