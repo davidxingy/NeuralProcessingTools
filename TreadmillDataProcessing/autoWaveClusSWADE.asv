@@ -27,11 +27,7 @@ function autoWaveClusSWADE(contDataFile, prevSpikesDataFile, savePlotFile, varar
 %              conforming to the usual 'par' struct in wave_clus. If not
 %              given, then the function will use the parameters that are
 %              saved in the manual wave_clus session containing the
-%              templates. Note that if you do give in custom parameters
-%              using this input argument, if you don't give some fields,
-%              then wave_clus will use the default values for those fields
-%              (not the values that were saved in the manual tracking
-%              wave_clus session)!
+%              templates.
 % 
 % The function will save a 'times_...' file in the same vein as the output
 % files from wave_clus, containing the 'cluster_class', 'spikes', and 'par'
@@ -313,7 +309,7 @@ cluster_class(:,1)=[classNums{:}]';
 cluster_class(:,2)=[sorted_timestamps{:} detectedSpikesVars.index(noise_waves)]';
 
 % parameters are just the parameters from the original wave_clus session
-par=parameters;
+par=waveclusVars.par;
 
 % save
 save(fullfile(origFilePath,sprintf('times_%s',origFileName)),'spikes','cluster_class','par')
