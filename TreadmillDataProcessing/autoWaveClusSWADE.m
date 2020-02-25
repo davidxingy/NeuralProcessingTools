@@ -186,7 +186,7 @@ colormap(end+1,:)=[0.2 0.2 0.2]; %rejected spikes are black
 
 % divide the row into at least 3 plots so that the aspect ratio isn't too
 % bad for the waveform plots
-nSubplotColumns = max(4, nClasses);
+nSubplotColumns = max(5, nClasses);
 
 % top row should be the raw neural time series
 subplot(3, nSubplotColumns, 1:nSubplotColumns)
