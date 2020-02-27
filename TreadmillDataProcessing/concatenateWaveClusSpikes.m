@@ -103,7 +103,7 @@ blockList = [];
 fileIndList = [];
 for iFile = 1:length(allFileNames)
     
-    %match current file to templte
+    %match current file to template
     foundInds = sscanf(allFileNames{iFile}, filenameStructureMod);
     
     %no match found, go to next filename
@@ -222,6 +222,7 @@ for iChan = 1:length(allChans)
             
             waveforms{iBlock} = fileVars{allBlocks(iBlock)}.spikes(...
                 fileVars{allBlocks(iBlock)}.cluster_class(:,1)==unitLabels(iUnit),:);
+            
             noise = waveforms{iBlock}(:,1:5);
             SNR(iBlock) = (max(nanmean(waveforms{iBlock}))-...
                 min(nanmean(waveforms{iBlock})))/(3*nanstd(noise(:)));
@@ -229,10 +230,10 @@ for iChan = 1:length(allChans)
         end
         
         %if the average SNR across blocks passes threshold, keep neuron
-        if mean(SNR)<SNRCutoff
+        if nanmean(SNR)<SNRCutoff
             continue
         else
-            neuronInfo(iNeuron).SNR = mean(SNR);
+            neuronInfo(iNeuron).SNR = nanmean(SNR);
             neuronInfo(iNeuron).Waveform = nanmean(cat(1,waveforms{:}));
             neuronInfo(iNeuron).WaveformStd = nanstd(cat(1,waveforms{:}));
             neuronInfo(iNeuron).OriginChannel = allChans(iChan);
@@ -243,6 +244,7 @@ for iChan = 1:length(allChans)
         for iBlock = 1:length(allBlocks)
             timestamps = fileVars{allBlocks(iBlock)}.cluster_class(...
                 fileVars{allBlocks(iBlock)}.cluster_class(:,1)==unitLabels(iUnit),2);
+            timestamps(isnan(timestamps)) = [];
             
             neuronInfo(iNeuron).Timestamps{allBlocks(iBlock)} = timestamps;
         end

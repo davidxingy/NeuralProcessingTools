@@ -318,7 +318,6 @@ for iNeuron=1:length(rec_waves)
         %in for the cluster_class, and the spike waveforms
         classNums{iNeuron}=iNeuron;
         rec_waves{iNeuron} = nan(size(detectedSpikesVars.spikes,2),1);
-        sorted_timestamps{iNeuron} = nan;
     else
         classNums{iNeuron}=repmat(iNeuron,1,size(rec_waves{iNeuron},2));
     end
