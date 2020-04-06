@@ -62,6 +62,18 @@ if ~any(eventInds==size(data,2)) && ~any(eventPercentages==100)
     eventPercentages(end+1) = 100;
 end
 
+% if eventpercentages has 0% or 100%, but the corresponding ind is
+% nan, then remove those (this is so that I can specify that the 0% or the
+% 100% index is actually unknown (rather than the first/last point).
+if any(isnan(eventInds(eventPercentages == 0)))
+    eventInds(eventPercentages == 0) = [];
+    eventPercentages(eventPercentages == 0) = [];
+end
+if any(isnan(eventInds(eventPercentages == 100)))
+    eventInds(eventPercentages == 100) = [];
+    eventPercentages(eventPercentages == 100) = [];
+end
+
 % get the "time points" (the indices) corresponding to the desired output
 % percentages
 desiredPercentageAsInds = interp1(eventPercentages, eventInds, desiredPercentages, 'linear', 'extrap');
