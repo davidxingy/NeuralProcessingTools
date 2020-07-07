@@ -94,16 +94,16 @@ for iCell=1:length(estimates)
     
     %initialize with zeros
     if dim==1
-        nSamples=size(actuals,1);
-        nTrials=size(actuals,2);
+        nSamples=size(actuals{iCell},1);
+        nTrials=size(actuals{iCell},2);
         
         for iMetric=1:length(metricsCell)
             metricsCell{iMetric}{iCell}=zeros(1,nTrials);
         end
         
     elseif dim==2
-        nSamples=size(actuals,2);
-        nTrials=size(actuals,1);
+        nSamples=size(actuals{iCell},2);
+        nTrials=size(actuals{iCell},1);
         
         for iMetric=1:length(metricsCell)
             metricsCell{iMetric}{iCell}=zeros(nTrials,1);
