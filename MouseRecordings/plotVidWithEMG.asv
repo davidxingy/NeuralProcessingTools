@@ -1,0 +1,242 @@
+function plotVidWithEMG(frameSampleInds,EMGData,vidFile,frameInd)
+
+% If no video inputted, use UI to let user select a file
+if isempty(vidFile)
+    [vidFilename, vidFilepath] = uigetfile({'*.mp4';'*.avi'}, 'Select a Video File', 'MultiSelect', 'off');
+    vidFile = fullfile(vidFilepath,vidFilename);
+end
+
+% if no frame is specified, or a frame less than 50 is used, used frame 50
+if isempty(frameInd) || frameInd<50
+    frameInd = 50;
+end
+
+% load in video
+v = VideoReader(vidFile);
+totalFrames = round(v.Duration * v.FrameRate); %this is the value I'm using right now, the FPS in the file is wrong
+vidFrames = {};
+
+% make figure for display
+mainFig = uifigure('position',[100 100 1400 700],'Color','w');
+setappdata(mainFig,'vidFile',vidFile);
+setappdata(mainFig,'frameInd',frameInd);
+setappdata(mainFig,'totalFrames',totalFrames);
+setappdata(mainFig,'v',v);
+setappdata(mainFig,'frameSampleInds',frameSampleInds);
+setappdata(mainFig,'EMGData',EMGData);
+setappdata(mainFig,'vidFrames',vidFrames);
+
+% make axis for video frame
+frameAxes = uiaxes(mainFig,'Position',[10 30 900 600]);
+
+setappdata(mainFig,'frameAxes',frameAxes);
+
+% Vid name display text
+vidFilenameStaticText = uilabel(mainFig,'Text',...
+    vidFile,...
+    'FontSize',12,'Position',[75 650 600 30]);
+
+% make plot axes for EMG data
+emgAxes.PL = uiaxes(mainFig,'Position',[875 10 500 150]);
+emgAxes.ECR = uiaxes(mainFig,'Position',[875 175 500 150]);
+emgAxes.tri = uiaxes(mainFig,'Position',[875 350 500 150]);
+emgAxes.bi = uiaxes(mainFig,'Position',[875 525 500 150]);
+
+% make time indicator lines on EMG
+emgAxes.linePL = line([0 0 ], [0 2.5],'color','r','lineWidth',2,'parent',emgAxes.PL);
+emgAxes.lineECR = line([0 0 ], [0 2.5],'color','r','lineWidth',2,'parent',emgAxes.ECR);
+emgAxes.linetri = line([0 0 ], [0 2.5],'color','r','lineWidth',2,'parent',emgAxes.tri);
+emgAxes.linebi = line([0 0 ], [0 2.5],'color','r','lineWidth',2,'parent',emgAxes.bi);
+
+
+setappdata(mainFig,'emgAxes',emgAxes);
+
+% make slider
+frameSlider = uislider(mainFig,'Position',[60 80 650 50],'Limits',[-40 0],'MajorTicks',-40:5:0,'MinorTicks',-40:0,...
+    'ValueChangingFcn',@(frameSlider,event) frameSliderMovingCallback(event,frameAxes));
+
+setappdata(mainFig,'frameSlider',frameSlider);
+
+% make loop play button
+saveGifButton = uibutton(mainFig,'push','Text','Save','Position',[720 50 50 20],...
+    'ButtonPushedFcn', @(saveGifButton,event) saveGifButtonCallback(saveGifButton,mainFig));
+
+loopButton = uibutton(mainFig,'state','Text','Loop','Position',[770 60 50 20],...
+    'ValueChangedFcn', @(loopButton,event) loopButtonCallback(loopPlayButton,mainFig));
+
+setappdata(mainFig,'loopPlayButton',loopPlayButton);
+setappdata(mainFig,'saveGifButton',saveGifButton);
+
+% make frame input box
+frameStaticText = uilabel(mainFig,'Text',...
+    ['Frame: '],...
+    'FontSize',15,'Position',[700 650 80 30]);
+frameInputText = uitextarea(mainFig,...
+    'Position',[750 650 100 30],'FontSize',15,...
+    'ValueChangedFcn',@(frameInputTextH,frameInputTextData) frameInputCallback(frameInputTextH,frameInputTextData));
+
+setappdata(mainFig,'frameInputText',frameInputText);
+
+% make plots with data
+updateFigure(mainFig);
+
+end
+
+
+function saveGifButtonCallback(saveGifButton,mainFig)
+
+% save gif
+n = 1;
+filename = 'vidGif.gif';
+frameAxes = getappdata(mainFig,'frameAxes');
+for i = -40:0
+    
+    events.Value = i;
+    frameSliderMovingCallback(events, frameAxes);
+    
+    gifFrame = getframe(mainFig);
+    im = frame2im(gifFrame);
+    [imind,cm] = rgb2ind(im,256);
+    if n == 1
+        imwrite(imind,cm,filename,'gif','DelayTime', 0.2, 'Loopcount',inf);
+    else
+        imwrite(imind,cm,filename,'gif','DelayTime', 0.2,'WriteMode','append');
+    end
+    n = n + 1;
+    
+end
+
+end
+
+
+
+function loopButtonCallback(loopButton,mainFig)
+
+% save gif
+frameSlider = getappdata(mainFig,'frameSlider');
+frameAxes = getappdata(mainFig,'frameAxes');
+currentInd = round(frameSlider.Value);
+
+while true
+    
+    loopButton = getappdata(mainFig,'loopButton');
+    if loopButton == true
+        return
+    end
+    
+    currentInd = currentInd + 1;
+    if currentInd > 0 
+        currentInd = -40;
+    end
+    events.Value = currentInd;
+    frameSliderMovingCallback(events, frameAxes);
+    pause(0.1)
+    
+end
+
+end
+
+
+
+function frameInputCallback(frameInputTextH, frameInputTextData)
+
+totalFrames = getappdata(frameInputTextH.Parent,'totalFrames');
+oldInd = getappdata(frameInputTextH.Parent,'frameInd');
+newInd = str2num(frameInputTextData.Value{1});
+
+if isempty(newInd)
+    frameInputTextH.Value = num2str(oldInd);
+    return;
+elseif newInd < 50
+    newInd = 50;
+elseif newInd > totalFrames-50
+    newInd = totalFrames-50;
+end
+
+setappdata(frameInputTextH.Parent,'frameInd',newInd);
+
+updateFigure(frameInputTextH.Parent)
+
+end
+
+
+
+function frameSliderMovingCallback(event, frameAxes)
+
+    vidFrames = getappdata(frameAxes.Parent,'vidFrames');
+    
+    %convert slider value to frame index
+    pastFrameInd = round(event.Value) + 41;
+    
+    %update display
+    imshow(vidFrames{pastFrameInd},'Parent',frameAxes)
+    
+    %also update EMG plots
+    lineTime = round(event.Value) / 41.4345;
+    emgAxes = getappdata(frameAxes.Parent,'emgAxes');
+    emgAxes.linePL.XData = repmat(lineTime,1,2);
+    emgAxes.lineECR.XData = repmat(lineTime,1,2);
+    emgAxes.linebi.XData = repmat(lineTime,1,2);
+    emgAxes.linetri.XData = repmat(lineTime,1,2);
+    xlim(emgAxes.PL,[-1 0])
+    xlim(emgAxes.ECR,[-1 0])
+    xlim(emgAxes.bi,[-1 0])
+    xlim(emgAxes.tri,[-1 0])
+    
+    
+end
+
+
+
+function updateFigure(mainFig)
+
+frameInd = getappdata(mainFig,'frameInd');
+emgAxes = getappdata(mainFig,'emgAxes');
+frameAxes = getappdata(mainFig,'frameAxes');
+v = getappdata(mainFig,'v');
+frameSampleInds = getappdata(mainFig,'frameSampleInds');
+EMGData = getappdata(mainFig,'EMGData');
+
+% load in last second of frames (41 frames)
+fps = v.FrameRate;% 41.4345 %this is hard coded right now because the files erroneously says its 30 fps
+v.CurrentTime = (frameInd-1)/fps - 1.3677;
+for iFrame = 1:41
+    vidFrames{iFrame} = readFrame(v);
+end
+
+setappdata(mainFig,'vidFrames',vidFrames);
+
+% get corresponding EMG data (1 second)
+emgInd = frameSampleInds(frameInd);
+plotData = EMGData(:,emgInd-20000:emgInd);
+
+% display
+imshow(vidFrames{end},'Parent',frameAxes)
+
+plot((-20000:0)/20000,plotData(1,:),'LineWidth',2,'Parent', emgAxes.PL)
+ylim(emgAxes.PL,[0 2.5])
+text(-0.5, 2.75,'PL', 'FontSize', 18, 'Parent', emgAxes.PL)
+emgAxes.linePL = line([0 0 ], [0 2.5],'color','r','lineWidth',2,'parent',emgAxes.PL);
+plot((-20000:0)/20000,plotData(2,:),'LineWidth',2,'Parent', emgAxes.ECR)
+ylim(emgAxes.ECR,[0 2.5])
+text(-0.5, 2.75,'ECR', 'FontSize', 18, 'Parent', emgAxes.ECR)
+emgAxes.lineECR = line([0 0 ], [0 2.5],'color','r','lineWidth',2,'parent',emgAxes.ECR);
+plot((-20000:0)/20000,plotData(3,:),'LineWidth',2,'Parent', emgAxes.bi)
+ylim(emgAxes.bi,[0 2.5])
+text(-0.5, 2.75,'Biceps', 'FontSize', 18, 'Parent', emgAxes.bi)
+emgAxes.linebi = line([0 0 ], [0 2.5],'color','r','lineWidth',2,'parent',emgAxes.bi);
+plot((-20000:0)/20000,plotData(4,:),'LineWidth',2,'Parent', emgAxes.tri)
+ylim(emgAxes.tri,[0 7.5])
+text(-0.5, 7.75,'Triceps', 'FontSize', 18, 'Parent', emgAxes.tri)
+emgAxes.linetri = line([0 0 ], [0 7.5],'color','r','lineWidth',2,'parent',emgAxes.tri);
+
+setappdata(mainFig,'emgAxes',emgAxes);
+
+% set slider back to 0
+frameSlider = getappdata(mainFig,'frameSlider');
+frameSlider.Value = 0;
+
+end
+
+
+% 
