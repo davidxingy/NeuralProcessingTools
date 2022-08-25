@@ -1,4 +1,4 @@
-function localMedianSubtraction(binDIR,metaFilename,binFilename,newBinFilename,nChans2Use,skipChannels)
+function localMedianSubtraction(binDIR,metaFilename,binFilename,newBinFilename,nChans2Use,skipChannels,removedChans)
 
 % load in metadata
 meta = ReadMeta(metaFilename, binDIR);
@@ -11,9 +11,8 @@ totSamps = round(str2double(meta.fileTimeSecs) * str2double(meta.imSampRate));
 
 % load in data, in segments of 1 000 000 samples  (to avoid running out of
 % memory)
-segLength = 1000000;
+segLength = 3000000;
 nSegs = ceil(totSamps/segLength);
-baselineLength = 500000;
 
 %open file for reading
 readFid = fopen(fullfile(binDIR, binFilename), 'rb');
@@ -50,6 +49,12 @@ for iSeg = 1:nSegs
         %subtract the local median
         localMedian = median(dataArray(localChanInds,:),1);
         processedArray(iChan,:) = dataArray(iChan,:) - localMedian;
+        
+        %for channels we want to remove, just set to 0
+        if any(iChan == removedChans)
+            processedArray(iChan,:) = 0;
+        end
+        
         
     end
         
