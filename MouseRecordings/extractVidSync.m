@@ -1,4 +1,10 @@
-function [ledValues, risingEdgeFrames, chunkFiles] = extractVidSync(vidDir, vidBaseName)
+function [ledValues, risingEdgeFrames, chunkFiles] = extractVidSync(vidDir, vidBaseName, thresh)
+
+if isempty(thresh)
+    LEDThresh = 150;
+else
+    LEDThresh = thresh;
+end
 
 % get all file with the basename
 allFilenames = string(ls(vidDir));
@@ -44,8 +50,7 @@ for iChunk = 1:length(chunkFiles)
             1, 200, 'gray', 0, ledROI);
         ledValues{iChunk}{iFile} = intensities.mean;
         
-        %also threshold at 200
-        LEDThresh = 200;
+        %also threshold at 150
         risingEdgeFrames{iChunk}{iFile} = find(intensities.mean(2:end) >= LEDThresh & intensities.mean(1:end-1) < LEDThresh) + 1;
         
     end
