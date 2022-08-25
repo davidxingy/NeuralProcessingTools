@@ -93,7 +93,7 @@ newFilenames = newFilenames(changedFilesInds);
 nRenamed = 0;
 for iFile=1:length(filenames)
     [success, errorMsg] = movefile(fullfile(filesDir,filenames{iFile}),...
-        fullfile(filesDir,newFilenames{iFile}));
+        fullfile(filesDir,newFilenames{iFile}),'f');
     
     if ~success
         warning('Unable to rename %s! \nReason: \n \t %s', filenames{iFile}, errorMsg)
