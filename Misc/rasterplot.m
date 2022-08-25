@@ -1,4 +1,4 @@
-function rasterplot(spikes,inputtype,plottype,ax,times,varargin)
+function rasterplot(spikes,inputtype,plottype,ax,times,yPos,varargin)
 % fighandle=rasterplot(spikes,inputtype,plottype,ax)
 % 
 % Creates a raster plot from the spikes of multiple neurons. For inputtype
@@ -23,6 +23,10 @@ elseif ~strcmpi(class(ax),'matlab.graphics.axis.Axes')
     ax=gca;
 end
 
+if ~exist('yPos')
+    yPos = 1:length(spikes);
+end
+
 
 plot_prop=reshape(varargin,length(varargin)/2,2);
 
@@ -39,9 +43,9 @@ switch lower(inputtype)
             
             switch plottype
                 case '|'
-                    line(repmat(spiketimes,2,1),repmat([whichneuron-0.4; whichneuron+0.4],1,numspikes),'color','k','linewidth',1.5)
+                    line(repmat(spiketimes,2,1),repmat([yPos(whichneuron)-0.4; yPos(whichneuron)+0.4],1,numspikes),'color','k','linewidth',1.5)
                 otherwise
-                    plot(spiketimes,repmat(whichneuron,1,numspikes),[plottype 'k'],'markersize',7)
+                    plot(spiketimes,repmat(yPos(whichneuron),1,numspikes),[plottype 'k'],'markersize',7)
             end
             
         end
@@ -57,14 +61,14 @@ switch lower(inputtype)
             switch plottype
                 case '|'
                     line([spikes{whichneuron}';spikes{whichneuron}'],...
-                        repmat([whichneuron-0.4; whichneuron+0.4],1,numspikes),'color','k');
+                        repmat([yPos(whichneuron)-0.4; s(whichneuron)+0.4],1,numspikes),'color','k');
                 otherwise
-                    scatter(spikes{whichneuron},repmat(whichneuron,1,numspikes),[plottype 'k'],'sizedata',50)
+                    scatter(spikes{whichneuron},repmat(yPos(whichneuron),1,numspikes),[plottype 'k'],'sizedata', 20)
             end
             
         end
         hold off
-        ylim([0 numneurons+1])
+        ylim([min(yPos)-1 max(yPos)+1])
 end
 
 
