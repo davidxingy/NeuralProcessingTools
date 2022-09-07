@@ -93,17 +93,17 @@ for iBehv = 1:length(analyzedBehaviors)
             else
                 error('Greater than 1 ind difference in neural and EMG bout segment lengths!')
             end
-                
+            
             [~, badEMGInds] = intersect(boutEMGInds,artifactEMGInds);
 %             boutEMGInds(badBoutInds)=[];
             
             thisBoutFR = noNanFRs(:,boutNeuralInds);
-            thisBoutFR(badNeurInds) = nan;
+            thisBoutFR(:,badNeurInds) = nan;
             boutFRs{iSection} = thisBoutFR;
             allNeurInds{iBehv,iSection} = boutNeuralInds;
 
             thisBoutEMG = downsampEMG(:,boutEMGInds);
-            thisBoutEMG(badEMGInds) = nan;
+            thisBoutEMG(:,badEMGInds) = nan;
             boutEMGs{iSection} = thisBoutEMG;
             allEMGInds{iBehv,iSection} = boutEMGInds;
             
