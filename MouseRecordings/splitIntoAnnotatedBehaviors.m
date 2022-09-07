@@ -1,4 +1,4 @@
-function [behavioralData, allNeurInds, allEMGInds] = splitIntoAnnotatedBehaviors(baseRecordingFolder,neuralDataFile)
+function [behavioralData, allNeurInds, allEMGInds] = splitIntoAnnotatedBehaviors(baseRecordingFolder,neuralDataFile, analyzedBehaviors, badEMGChans)
 
 load(fullfile(baseRecordingFolder,'ProcessedData','VideoSyncFrames.mat'))
 load(fullfile(baseRecordingFolder,'ProcessedData','neuronDataStruct.mat'))
@@ -40,10 +40,7 @@ load(fullfile(baseRecordingFolder,'ProcessedData',[baseName '_ProcessedEMG_MetaD
 neuralEMGOffset = round(frameNeuropixelSamples{1}{1}(1)/30 - frameEMGSamples{1}{1}(1)/20);
 downsampEMG = downsample(allEMG',20)';
 
-
-analyzedBehaviors = {'grooming','eating','walkgrid','walkflat','rearing','climbup','climbdown','still','jumping','jumpdown'};
 maxSamples = frameNeuropixelSamples{1}{end}(end);
-badEMGChans = [1 8];
 
 artifacts = histcounts(artifactTS,1:30:maxSamples);
 artifactNeurBins = find(convGauss(artifacts, 1, 10));
