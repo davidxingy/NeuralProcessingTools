@@ -1,4 +1,4 @@
-function [behavioralData, allNeurInds, allEMGInds] = splitIntoAnnotatedBehaviors(baseRecordingFolder,neuralDataFile, analyzedBehaviors, badEMGChans)
+function [behavioralData, allNeurInds, allEMGInds] = splitIntoAnnotatedBehaviors(baseRecordingFolder, neuralDataFile, analyzedBehaviors, badEMGChans, binSize, gaussStd)
 
 load(fullfile(baseRecordingFolder,'ProcessedData','VideoSyncFrames.mat'))
 load(fullfile(baseRecordingFolder,'ProcessedData','neuronDataStruct.mat'))
@@ -37,22 +37,23 @@ load(fullfile(baseRecordingFolder,'ProcessedData',[baseName '_ProcessedEMG_MetaD
 
 
 % downsample and align to neural data
-neuralEMGOffset = round(frameNeuropixelSamples{1}{1}(1)/30 - frameEMGSamples{1}{1}(1)/20);
-downsampEMG = downsample(allEMG',20)';
+neuralEMGOffset = round(frameNeuropixelSamples{1}{1}(1)/(30*binSize) - frameEMGSamples{1}{1}(1)/(20*binSize));
+downsampEMG = downsample(allEMG',(20*binSize))';
 
 maxSamples = frameNeuropixelSamples{1}{end}(end);
 
-artifacts = histcounts(artifactTS,1:30:maxSamples);
-artifactNeurBins = find(convGauss(artifacts, 1, 10));
+artifacts = histcounts(artifactTS,1:(30*binSize):maxSamples);
+artifactNeurBins = find(convGauss(artifacts, 1, gaussStd));
 
 % get datapoints which has neural artifacts
 artifactEMGInds = find(histcounts(...
-    (artifactTS-frameNeuropixelSamples{1}{1}(1))/30*20+frameEMGSamples{1}{1}(1),1:20:maxSamples));
+    (artifactTS-frameNeuropixelSamples{1}{1}(1))/3*2+frameEMGSamples{1}{1}(1),1:(20*binSize):maxSamples));
 
 % get datapoints which has emg artifacts
-artifactEMGInds = unique([artifactEMGInds find(histcounts(removedInds,1:20:size(allEMG,2)))]);
+artifactEMGInds = unique([artifactEMGInds find(histcounts(removedInds,1:(20*binSize):size(allEMG,2)))]);
 
 clear allEMG
+downsampEMG(badEMGChans,:) = [];
 
 for iBehv = 1:length(analyzedBehaviors)
     
@@ -76,14 +77,14 @@ for iBehv = 1:length(analyzedBehaviors)
         boutEnds = [boutTransitions length(frameInds)];
         
         for iBout = 1:length(boutStarts)
-            boutNeuralStart = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutStarts(iBout)))/30);
-            boutNeuralEnd = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutEnds(iBout)))/30);
+            boutNeuralStart = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutStarts(iBout)))/(30*binSize));
+            boutNeuralEnd = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutEnds(iBout)))/(30*binSize));
             boutNeuralInds = boutNeuralStart:boutNeuralEnd;
             [~, badNeurInds] = intersect(boutNeuralInds,artifactNeurBins);
 %             boutNeuralInds(badBoutInds)=[];
             
-            boutEMGStart = round(frameEMGSamples{1}{iVid}(frameInds(boutStarts(iBout)))/20);
-            boutEMGEnd = round(frameEMGSamples{1}{iVid}(frameInds(boutEnds(iBout)))/20);
+            boutEMGStart = round(frameEMGSamples{1}{iVid}(frameInds(boutStarts(iBout)))/(20*binSize));
+            boutEMGEnd = round(frameEMGSamples{1}{iVid}(frameInds(boutEnds(iBout)))/(20*binSize));
             
             boutSegDiff = boutEMGEnd-boutEMGStart - (boutNeuralEnd-boutNeuralStart);
             if boutSegDiff == 0
@@ -115,7 +116,7 @@ for iBehv = 1:length(analyzedBehaviors)
         
         behavioralData.(behav).boutFRs = boutFRs;
         behavioralData.(behav).allBoutFRs = allBoutFRs;
-                
+
         behavioralData.(behav).boutEMGs = boutEMGs;
         behavioralData.(behav).allBoutEMGs = allBoutEMGs;
         
