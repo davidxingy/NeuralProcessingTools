@@ -16,6 +16,8 @@ totSamps = round(str2double(meta.fileTimeSecs) * str2double(meta.imSampRate));
 
 % variable holding list of all detected artifact timestamps
 artifactTS = [];
+smallArtifactTS  = [];
+lickArtifactTS = [];
 
 % save plots
 if savePlots
@@ -60,12 +62,12 @@ for iSeg = 1:nSegs
     end
     
     %detect artifact samples
-    artInds = artifactDetection(dataArray);
+    [allArtInds smallArtInds lickArtInds] = artifactDetection(dataArray);
     
     %get data to replace the artifact with
     if iSeg == 1
         
-        if any(artInds<30000)
+        if any(allArtInds<30000)
             warning('Baseline has artifact, aborting')
             return
         end
@@ -75,11 +77,13 @@ for iSeg = 1:nSegs
     end
     
     %add to list
-    artifactTS = [artifactTS artInds+segLength*(iSeg-1)];
+    artifactTS = [artifactTS allArtInds+segLength*(iSeg-1)];
+    smallArtifactTS = [smallArtifactTS smallArtInds+segLength*(iSeg-1)];
+    lickArtifactTS = [lickArtifactTS lickArtInds+segLength*(iSeg-1)];
     
     %now, remove from the current block, the detected artifacts in the
     %current block, and the artifacts bleeding over from the previous block
-    currentBlockInds = artInds(artInds > 0 & artInds <= segLength);
+    currentBlockInds = allArtInds(allArtInds > 0 & allArtInds <= segLength);
     
     if length(currentBlockInds)>baselineLength
         warning('More artifact indices than baseline, aborting')
@@ -92,10 +96,10 @@ for iSeg = 1:nSegs
     end
     
     %add samples less than 0 to previous block
-    prevBlockInds = artInds(artInds<=0) + segLength;
+    prevBlockInds = allArtInds(allArtInds<=0) + segLength;
     
     %save samples after the block end for next block
-    nextBlockInds = artInds(artInds>segLength) - segLength;
+    nextBlockInds = allArtInds(allArtInds>segLength) - segLength;
     
     if iSeg >= 2
         %now, for the previous block, remove the artifacts that were bleeding
@@ -130,9 +134,11 @@ for iSeg = 1:nSegs
         end
         
         %and save final figure
-        currentH = saveOutputFig(plotHandles, prevBlockArray(1:10,:)', plotHandles,...
-            fullfile(binDIR,'ArtifactRemovalPlots',[binFilename '_Block' num2str(iSeg) '.png']));
-        
+        if savePlots
+            currentH = saveOutputFig(plotHandles, prevBlockArray(1:10,:)', plotHandles,...
+                fullfile(binDIR,'ArtifactRemovalPlots',[binFilename '_Block' num2str(iSeg) '.png']));
+        end
+
     end
     
 end
@@ -143,12 +149,12 @@ fclose(writeFid);
 close all
 
 % save list of all artifact timestamps
-save(fullfile(binDIR, 'artifactTimestamps.mat'),'artifactTS')
+save(fullfile(binDIR, 'artifactTimestamps.mat'),'artifactTS','smallArtifactTS','lickArtifactTS')
 
 end
 
 
-function artInds = artifactDetection(dataArray)
+function [allArtInds smallArtInds lickArtInds] = artifactDetection(dataArray)
 % function for finding indices of artifacts in the data
 
 % criterion is more than 80% of all channels experience a large increase in
@@ -185,7 +191,9 @@ smallBuffInds = getBufferInds(smallArts,smallArtPreBuffer,smallArtPostBuffer);
 % next lick artifacts
 lickBuffInds = getBufferInds(lickArts,lickArtPreBuffer,lickArtPostBuffer);
 
-artInds = unique([find(smallArts) smallBuffInds find(lickArts) lickBuffInds]);
+smallArtInds = unique([find(smallArts) smallBuffInds]);
+lickArtInds = unique([find(lickArts) lickBuffInds]);
+allArtInds = unique([smallArtInds lickArtInds]);
 
 
 end
