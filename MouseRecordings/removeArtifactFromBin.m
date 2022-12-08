@@ -161,7 +161,7 @@ function [allArtInds smallArtInds lickArtInds] = artifactDetection(dataArray)
 % signal amplitude over the last 3 samples
 % also, any voltage levels past 300 is considered a lick artifact
 % numbers based on emperical observations of D012-022422-ArenaRecording 
-smallArtThresh = 150;
+smallArtThresh = 200;
 smallArtDiffSamples = 3;
 smallArtFractionChans = 0.8;
 
