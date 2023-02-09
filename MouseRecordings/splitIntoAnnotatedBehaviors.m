@@ -1,4 +1,4 @@
-function [behavioralData, allNeurInds, allEMGInds] = splitIntoAnnotatedBehaviors(baseRecordingFolder, neuralDataFile, analyzedBehaviors, badEMGChans, binSize, gaussStd)
+function [behavioralData, allNeurInds, allEMGInds, unusedBouts] = splitIntoAnnotatedBehaviors(baseRecordingFolder, neuralDataFile, analyzedBehaviors, badEMGChans, binSize, gaussStd)
 
 load(fullfile(baseRecordingFolder,'ProcessedData','VideoSyncFrames.mat'))
 load(fullfile(baseRecordingFolder,'ProcessedData','neuronDataStruct.mat'))
@@ -33,7 +33,7 @@ clear processedEMG
 clear filteredEMG
 
 % also load in metaData
-load(fullfile(baseRecordingFolder,'ProcessedData',[baseName '_ProcessedEMG_MetaData']))
+load(fullfile(baseRecordingFolder,'ProcessedData',[baseName '_MetaData']))
 
 
 % downsample and align to neural data
@@ -58,9 +58,12 @@ downsampEMG(badEMGChans,:) = [];
 for iBehv = 1:length(analyzedBehaviors)
     
     iSection = 1;
+    iAllSection = 1;
     boutFRs = {};
     boutEMGs = {};
     behav = analyzedBehaviors{iBehv};
+    unusedBouts{iBehv} = [];
+
     
     behavInd = find(strcmp(string(behaviors),behav));
     for iVid = 1:length(behaviorFrames{behavInd})
@@ -82,6 +85,17 @@ for iBehv = 1:length(analyzedBehaviors)
             boutNeuralInds = boutNeuralStart:boutNeuralEnd;
             [~, badNeurInds] = intersect(boutNeuralInds,artifactNeurBins);
 %             boutNeuralInds(badBoutInds)=[];
+        
+            %check to make sure the data is valid (there are some datasets
+            %where there was dropped data packets from spikeGLX)
+            if isnan(boutNeuralStart) || isnan(boutNeuralEnd)
+                unusedBouts{iBehv}(iAllSection) = 1;
+                iAllSection = iAllSection + 1;
+                continue
+            else
+                unusedBouts{iBehv}(iAllSection) = 0;
+                iAllSection = iAllSection + 1;
+            end
             
             boutEMGStart = round(frameEMGSamples{1}{iVid}(frameInds(boutStarts(iBout)))/(20*binSize));
             boutEMGEnd = round(frameEMGSamples{1}{iVid}(frameInds(boutEnds(iBout)))/(20*binSize));
