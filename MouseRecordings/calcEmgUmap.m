@@ -183,6 +183,9 @@ origDownsampEMGInd([removedIndsDownSamp badSegInds]) = [];
 % remove the artifacts and the bad segs
 allData(:,[removedIndsDownSamp badSegInds]) = [];
 
+clear allData
+clear downsampEMG
+
 % if makePlots
 %     figure
 %     plot(1,1)
@@ -212,8 +215,6 @@ behvLabelsNoArt([removedIndsDownSamp badSegInds]) = [];
 
 annotatedBehvLabels = find(behvLabelsNoArt~=0);
 
-clear allData
-clear downsampEMG
 
 %generally found these values to be a good amount
 % nUMapNeighbors = 100; 
