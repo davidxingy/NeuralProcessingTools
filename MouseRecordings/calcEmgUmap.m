@@ -84,6 +84,7 @@ end
 % load downsampled EMG Data
 load(fullfile(baseDir,'ProcessedData','EMG1ms.mat'))
 load(fullfile(baseDir,'ProcessedData',[recordingSessionName '_ProcessedEMG_MetaData.mat']))
+nDownsampPoints = size(downsampEMG,2);
 
 % load video and neuropixel sync
 load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
@@ -201,7 +202,7 @@ clear downsampEMG
 [~, ~, boutEMGInds] = splitIntoAnnotatedBehaviors(baseDir,'NeuralFiringRates1msBins10msGauss.mat', analyzedBehaviors, [], 1, 10);
 
 % assign behavioral labels to each of the points
-behvLabels = zeros(1,size(downsampEMG,2)); %use downsampEMG which was before the artifact inds were removed
+behvLabels = zeros(1,nDownsampPoints); %use downsampEMG which was before the artifact inds were removed
 for iBehv = 1:length(behaviors)-1
     
     allBehvInds = cat(2,boutEMGInds{iBehv,:});
