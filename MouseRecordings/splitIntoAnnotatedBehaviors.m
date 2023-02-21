@@ -33,7 +33,7 @@ clear processedEMG
 clear filteredEMG
 
 % also load in metaData
-load(fullfile(baseRecordingFolder,'ProcessedData',[baseName '_MetaData']))
+load(fullfile(baseRecordingFolder,'ProcessedData',[baseName '_ProcessedEMG_MetaData']))
 
 
 % downsample and align to neural data
