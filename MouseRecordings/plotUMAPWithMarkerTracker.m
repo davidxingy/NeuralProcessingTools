@@ -1,4 +1,4 @@
-function [plotH, functionVars]= plotUMAP(currentFrame,initiatePlot,functionVarsIn)
+function [plotH, functionVars]= plotUMAPWithMarkerTracker(currentFrame,initiatePlot,functionVarsIn)
 % [plotH, functionVars]= plotUMAP(currentFrame,initiatePlot,functionVarsIn)
 % function to plot uMAP (or any two scatter plot) with respect to video
 % recording
