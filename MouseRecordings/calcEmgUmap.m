@@ -22,7 +22,7 @@ function calcEmgUmap(baseDir, recordingSessionName, projDownSamp, nUMapNeighbors
 %                           EMG channels are bad and shouldn't be used.
 %                           Default empty.
 % 
-% indsToUse -               Optional. 1xN array of logicals. If there is a
+% subsetToUse -             Optional. 1xN array of logicals. If there is a
 %                           subset of (1ms) time points to run the UMAP on.
 %                           N should be the same as the total timepoints
 %                           that is being used
@@ -38,9 +38,9 @@ function calcEmgUmap(baseDir, recordingSessionName, projDownSamp, nUMapNeighbors
 % David Xing 2/20/2023
 
 % parse optional input parameters
-narginchk(3, 7)
+narginchk(3, 8)
 
-if length(varargin)>1
+if length(varargin)>=1
     if isempty(varargin{1})
         badEMGChans = [];
     else
@@ -50,17 +50,17 @@ else
     badEMGChans = [];
 end
 
-if length(varargin)>2
+if length(varargin)>=2
     if isempty(varargin{2})
-        indsToUse = [];
+        subsetToUse = [];
     else
-        indsToUse = varargin{2};
+        subsetToUse = varargin{2};
     end
 else
-    indsToUse = [];
+    subsetToUse = [];
 end
 
-if length(varargin)>3
+if length(varargin)>=3
     if isempty(varargin{3})
         useManualAnnotations = true;
     else
@@ -70,7 +70,7 @@ else
     useManualAnnotations = true;
 end
 
-if length(varargin)>4
+if length(varargin)>=4
     if isempty(varargin{4})
         nUMAPDims = 2;
     else
@@ -99,6 +99,8 @@ neuroRemovedInds = getRejectedDataInds(frameNeuropixelSamples);
 badEMGInds = NeurEMGSync([lickArtifactTS neuroRemovedInds], frameEMGSamples, frameNeuropixelSamples, 'Neuropixel');
 % get it in downsampled 1ms bins
 artifactEMGInds = find(histcounts(badEMGInds,1:20:maxSamples));
+% artifactEMGInds = find(histcounts(...
+%     (lickArtifactTS-frameNeuropixelSamples{1}{1}(1))/30*20+frameEMGSamples{1}{1}(1),1:20:maxSamples));
 artifactEMGInds(artifactEMGInds > size(downsampEMG,2)) = [];
 % also don't use bins which have EMG artifacts
 artifactEMGInds = unique([artifactEMGInds find(histcounts(removedInds,1:20:size(downsampEMG,2)*20))]);
@@ -216,6 +218,14 @@ behvLabelsNoArt([removedIndsDownSamp badSegInds]) = [];
 
 annotatedBehvLabels = find(behvLabelsNoArt~=0);
 
+if isempty(subsetToUse)
+    indsToUse = 1:size(freqData,1);
+else
+    if length(subsetToUse) ~= size(freqData,1)
+        error('subsetToUse must be the same size as the input data to the UMAP!')
+    end
+    indsToUse = find(subsetToUse);
+end
 
 %generally found these values to be a good amount
 % nUMapNeighbors = 100; 
@@ -227,11 +237,13 @@ distKL = @(x,y) log(y./sum(y,2))*(x/sum(x))'*-1+repmat((x/sum(x))*log((x/sum(x))
 % Do UMAP
 if useManualAnnotations
     % run initial UMAP projection using only manually annotated points
-    [reduction,umap,clusterIdentifiers,extras] = run_umap(freqData(annotatedBehvLabels(1:projDownSamp:end),:),...
+    inputFeatures = freqData(intersect(indsToUse,annotatedBehvLabels),:);
+    [reduction,umap,clusterIdentifiers,extras] = run_umap(inputFeatures(1:projDownSamp:end,:),...
         'n_components',nUMAPDims,'n_neighbors',nUMapNeighbors,'save_template_file', 'projUMAPTemplate.mat','Distance',distKL);
 else
     % run UMAP using all points
-    [reduction,umap,clusterIdentifiers,extras] = run_umap(freqData((1:projDownSamp:end),:),...
+    inputFeatures = freqData(indsToUse,:);
+    [reduction,umap,clusterIdentifiers,extras] = run_umap(inputFeatures(1:projDownSamp:end,:),...
         'n_components',nUMAPDims,'n_neighbors',nUMapNeighbors,'save_template_file', 'projUMAPTemplate.mat','Distance',distKL);
 end
 
@@ -244,7 +256,8 @@ clusterIdentifiers = [];
 umapExtras = {};
 
 for iChunk = 1:nChunks
-    [reduction_chunk,umap_chunk,clusterIdentifiers_chunk,extras_chunk] = run_umap(freqData(iChunk:nChunks:end,:),'template_file','projUMAPTemplate.mat');
+    inputFeatures = freqData(indsToUse,:);
+    [reduction_chunk,umap_chunk,clusterIdentifiers_chunk,extras_chunk] = run_umap(inputFeatures(iChunk:nChunks:end,:),'template_file','projUMAPTemplate.mat');
     reduction(iChunk:nChunks:size(freqData,1),:) = reduction_chunk;
     clusterIdentifiers(iChunk:nChunks:size(freqData,1)) = clusterIdentifiers_chunk;
     umapProps{iChunk} = umap_chunk;
@@ -252,7 +265,7 @@ for iChunk = 1:nChunks
 end
 
 % save projection
-save('UMAP','reduction','umapProps','clusterIdentifiers','umapExtras','freqData','analyzedBehaviors','behvLabels','behvLabelsNoArt','-v7.3')
+save('UMAP','reduction','umapProps','clusterIdentifiers','umapExtras','freqData','analyzedBehaviors','behvLabels','behvLabelsNoArt','origDownsampEMGInd','-v7.3')
 
 
 % 
