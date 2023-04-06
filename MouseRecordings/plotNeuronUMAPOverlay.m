@@ -1,30 +1,57 @@
-clear
-close all
+function activityUMAPOverlay(baseDir, frFile, activityType, varargin)
+% activityUMAPOverlay(baseDir, frFile, activityType, savePlotDir, nShuff)
+% 
+% Function to cluster UMap embedding space into distinct regions using
+% watershed and manual assignment of clusters. Will also do some cleaning
+% up of the time-series of the assigned regions. Will also save the region
+% assignments to the same file that contains the umap results.
+% 
+% Inputs:
+% baseDir           - Folder containing the data for the recording session
+% 
+% frFile            - File contanin the firing rate data
+% 
+% activityType      - String specifying the type of activity to overlay on
+%                     the UMAP space. Can be either 'FiringRate','SSA', or
+%                     'EMG'
+% 
+% savePlotDir       - Optional input, string specifying the folder to save
+%                     the overlay plots to. If empty, will not save any
+%                     plots. Default empty.
+% 
+% nShuff            - Optional input, number of time-shift shuffles to do
+%                     for permutation tests. Default 200.
+% 
+% David Xing, last updated 3/20/2023
 
-baseDir = 'Z:\David\ArenaRecordings\NeuropixelsTest\D024-111022-ArenaRecording';
-frFile = 'NeuralFiringRates1msBins10msGauss.mat';
-umapDownSamp = 1;
+% parse optional input parameters
+narginchk(3, 5)
 
-% load firing rate data
-load(fullfile(baseDir,'ProcessedData',frFile))
-clear striatumFRs cortexFRs noNanFRs
+if length(varargin)>=1
+    if isempty(varargin{1})
+        savePlotDir = [];
+    else
+        savePlotDir = varargin{1};
+    end
+else
+    savePlotDir = [];
+end
+
+if length(varargin)>=2
+    if isempty(varargin{1})
+        nShuff = 200;
+    else
+        nShuff = varargin{1};
+    end
+else
+    nShuff = 200;
+end
+
 % load UMAP projection
 load(fullfile(baseDir,'ProcessedData','UMAP.mat'),'reduction','origDownsampEMGInd','gridInds','watershedRegions','regionWatershedLabels')
+
 % load in sync data
 load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
-
-% also load EMG data (for looking at how each muscle is distributed)    
-load(fullfile(baseDir,'ProcessedData', 'EMG1ms.mat'))
-load(fullfile(baseDir,'ProcessedData', 'D024-111022-ArenaRecording_ProcessedEMG_MetaData.mat'))
-
-% % also load SSA Data (and corresponding input data) 
-% load(fullfile(baseDir,'ProcessedData', 'SSA','allTimePointsSSA.mat'))
-% ssaInput = load(fullfile(baseDir, 'ProcessedData','NeuralFiringRates10msBins30msGauss.mat'),'allFRs');
-
-% get watershedding region splitting
-[regionBoundaryIndsX, regionBoundaryIndsY] = find(watershedRegions==0);
-
-downSampleAmount = 1;
 
 % get mapping from EMG to neural time points
 % just do linear interpolation
@@ -33,32 +60,59 @@ emgNeurSlope = (round(frameNeuropixelSamples{1}{end}(end)/30)-round(frameNeuropi
 emgNeurOffset = round(frameNeuropixelSamples{1}{1}(1)/30) - emgNeurSlope*round(frameEMGSamples{1}{1}(1)/20);
 
 % just do it for every time point in reduction
-reducNeurInds = round(round(origDownsampEMGInd(1:umapDownSamp:end)*emgNeurSlope + emgNeurOffset)/1);
+reducNeurInds = round(NeurEMGSync(origDownsampEMGInd*20, frameEMGSamples, frameNeuropixelSamples, 'EMG')/30);
 maxNeurSamples = round(frameNeuropixelSamples{1}{end}(end)/30);
 reducIndsToUse = find(reducNeurInds < maxNeurSamples);
 
-% get neural data corresponding to the UMAP time points
-reducFRs = allFRs(:,reducNeurInds(reducIndsToUse));
-clear allFRs
 
-% don't use any points where there's nans in the FR data
-nanReducPoints = any(isnan(reducFRs),1);
-reducIndsToUse(nanReducPoints) = [];
-reducFRsNoNans = reducFRs(:,~nanReducPoints);
-clear reducFRs
+switch lower(activityType)
 
-% get emg
-reducEMGInds = origDownsampEMGInd(1:umapDownSamp:end);
-reducEMGs = downsampEMG(:,reducEMGInds(reducIndsToUse));
+    case 'firingrate'
+        % load firing rate data
+        load(fullfile(baseDir,'ProcessedData',frFile),'allFRs','striatumInds','cortexInds')
+        
+        % get neural data corresponding to the UMAP time points
+        reducFRs = allFRs(:,reducNeurInds(reducIndsToUse));
+        clear allFRs
+
+        % don't use any points where there's nans in the FR data
+        nanReducPoints = any(isnan(reducFRs),1);
+        reducIndsToUse(nanReducPoints) = [];
+        reducSig = reducFRs(:,~nanReducPoints);
+        clear reducFRs
+
+    case 'emg'
+        % load EMG data
+        load(fullfile(baseDir,'ProcessedData', 'EMG1ms.mat'))
+
+        %get meta data as well
+        sessionFiles = string(ls(fullfile(baseDir,'ProcessedData')));
+        metaDataFile = sessionFiles(contains(sessionFiles,'ProcessedEMG_MetaData'));
+
+        if isempty(metaDataFile)
+            error('Unable to find EMG Meta data file!')
+        end
+        load(fullfile(baseDir,'ProcessedData', metaDataFile))
+
+        % get emg corresponding to the UMAP
+        reducEMGInds = origDownsampEMGInd;
+        reducSig = downsampEMG(:,reducEMGInds(reducIndsToUse));
+
+    case 'ssa'
+        %load SSA projections
+        % load(fullfile(baseDir,'ProcessedData', 'SSA','allTimePointsSSA.mat'))
+        % ssaInput = load(fullfile(baseDir, 'ProcessedData','NeuralFiringRates10msBins30msGauss.mat'),'allFRs');
+
+end
+
+% get watershedding region splitting
+[regionBoundaryIndsX, regionBoundaryIndsY] = find(watershedRegions==0);
 
 % Generate grid
 nGridPoints = length(gridInds);
 rangeVals = [min(reduction(reducIndsToUse,1)) max(reduction(reducIndsToUse,1)); ...
     min(reduction(reducIndsToUse,2)) max(reduction(reducIndsToUse,2))]*1.5;
 
-% rangeVals = [-15 15; -15 15];
-% xx = linspace(rangeVals(1,1),rangeVals(1,2),nGridPoints);
-% yy = linspace(rangeVals(2,1),rangeVals(2,2),nGridPoints);
 gridIndsX = gridInds;
 gridIndsY = gridInds;
 [meshGridX,meshGridY] = meshgrid(gridIndsX,gridIndsY);
@@ -80,17 +134,8 @@ binNPoints = accumarray(binLabels, ones(1,length(binLabels)));
 % it for firing rate calculations (e.g. it's a on the corner of the grid)
 accumarrayRealOutputs = find(binNPoints~=0);
 
-% figure;
-% imagesc(xx,yy,fliplr(density))
-% colorbar
-% hold on
-% plot(-xx(jj),xx(ii),'k.')
-% xlim([-12.5,9])
-% ylim([-9,7])
+% go through each SSA dimension
 
-
-% % go through each SSA dimension
-% 
 % % also get SSA low dimensional projections
 % for iRegion = 1:3
 %     ssaData = ssaResults{iRegion}.trajs;
@@ -118,22 +163,20 @@ accumarrayRealOutputs = find(binNPoints~=0);
 % 
 %         spaceAveZScoresFilt = fftshift(real(ifft2(fft2(gaussKernal).*fft2(spaceAveZScores))));
 % 
-%         figH = figure('Visible','on');
+%         figH = figure('Visible','off','Units','pixels','OuterPosition',[200 50 500 1000]);
+%         tiledlayout(2,1,"TileSpacing","tight")
+%         nexttile
 %         imagesc(gridIndsX, gridIndsY, fliplr(spaceAveZScoresFilt'))
 %         hold on
 %         plot(-1*(gridIndsX(regionBoundaryIndsY)),gridIndsY(regionBoundaryIndsX),'k.')
 %         colorbar
 % 
-%         %     xlim([-12.5,9])
-%         %     ylim([-9,7])
+% %             xlim([-12.5,9])
+% %             ylim([-9,7])
 % %         xlim([-14,8])
 % %         ylim([-8,6])
 %     xlim([-12,8])
 %     ylim([-8,12])
-% 
-%         title(['SSA Latent Dim ' num2str(iSSA)])
-% 
-%         saveas(figH,['./UMAPFRs/', regionNames{iRegion} '_SSALatent' num2str(iSSA) '.png'])
 % 
 %         %now the average latent value within each of the divided regions
 %         watershedRegionsAdj = watershedRegions';
@@ -144,38 +187,30 @@ accumarrayRealOutputs = find(binNPoints~=0);
 %         for iShedRegion = 1:length(regionWatershedLabelsCat)
 %             shedReducInds = find(reducWatershedRegions == regionWatershedLabelsCat(iShedRegion));
 %             ssaReduc = reducSSA(iSSA,shedReducInds);
-%             regionAveSSA{iRegion}(iSSA,iShedRegion) = nanmean(ssaReduc);
+%             regionAveSSA{iRegion}(iSSA,iShedRegion) = nanmean(abs(ssaReduc));
 %             ssaReducNonZeros = ssaReduc(ssaReduc ~= 0);
-%             regionPrctSSA{iRegion}(iSSA,iShedRegion) = prctile(ssaReducNonZeros,99.99)*1000;
+%             regionPrctSSA{iRegion}(iSSA,iShedRegion) = prctile(abs(ssaReducNonZeros),99)*1000;
 % 
 %             %get the bins at which the points are in
 %             regionFiltValues = spaceAveZScoresFilt(binLabels(shedReducInds));
 %             %and average across that instead
-%             regionAveSSAFilt{iRegion}(iSSA,iShedRegion) = mean(regionFiltValues);
+%             regionAveSSAFilt{iRegion}(iSSA,iShedRegion) = mean(abs(regionFiltValues));
 %             regionFiltValuesNonZeros = regionFiltValues(regionFiltValues ~= 0);
-%             regionPrctSSAFilt(iSSA,iShedRegion) = prctile(regionFiltValuesNonZeros,99);
+%             regionPrctSSAFilt{iRegion}(iSSA,iShedRegion) = prctile(abs(regionFiltValuesNonZeros),99);
 % 
 %         end
 % 
-%         %     %also do permutation
-%         %     for iShuff = 1:nShuff
-%         %         shuffSSA = reducSSA(iSSA,indShuff(iShuff,:));
-%         %
-%         %         for iShedRegion = 1:length(regionWatershedLabelsCat)
-%         %             shedReducInds = find(reducWatershedRegions == regionWatershedLabelsCat(iShedRegion));
-%         %             ssaReduc = shuffSSA(shedReducInds);
-%         %             regionAveSSAShuff(iSSA,iShedRegion,iShuff) = nanmean(ssaReduc);
-%         %             ssaReducNonZeros = ssaReduc(ssaReduc ~= 0);
-%         %             regionPrctSSAShuff(iSSA,iShedRegion,iShuff) = prctile(ssaReducNonZeros,99.99)*1000;
-%         %
-%         %             %get the bins at which the points are in
-%         %             regionFiltValues = spaceAveZScoresFilt(binLabels(shedReducInds));
-%         %             %and average across that instead
-%         %             regionAveSSAFiltShuff(iSSA,iShedRegion,iShuff) = mean(regionFiltValues);
-%         %
-%         %         end
-%         %
-%         %     end
+%         nexttile
+%         plot(regionAveSSAFilt{iRegion}(iSSA,:))
+%         hold on
+%         plot(regionAveSSA{iRegion}(iSSA,:))
+%         plot(regionPrctSSAFilt{iRegion}(iSSA,:))
+% 
+%         legend('Filtered Average','Value Averaged','Filtered 99 Percentile','box','off')
+%         title([regionNames{iRegion} ' SSA Latent Dim ' num2str(iSSA)])
+%         saveas(figH,['./UMAPFRs/', regionNames{iRegion} '_SSALatent' num2str(iSSA) '.png'])
+%         close(figH)
+% 
 % 
 %     end
 % 
@@ -213,14 +248,14 @@ accumarrayRealOutputs = find(binNPoints~=0);
 
 
 % go through each neuron and plot the average firing rates in the space
-for iNeuron = 1:size(reducFRsNoNans,1)
+for iChan = 1:size(reducSigs,1)
 
-    binFRSums = accumarray(binLabels,reducFRsNoNans(iNeuron,:));
-    binAveFRs = binFRSums(accumarrayRealOutputs)./binNPoints(accumarrayRealOutputs)*1000;
+    binSigSums = accumarray(binLabels,reducSigs(iChan,:));
+    binAveSig = binSigSums(accumarrayRealOutputs)./binNPoints(accumarrayRealOutputs)*1000;
 
     spaceAveZScores = zeros(nGridPoints,nGridPoints);
-    binAveZScores = (binAveFRs - mean(binAveFRs))/std(binAveFRs);
-    binAveZScores = binAveFRs;
+    binAveZScores = (binAveSig - mean(binAveSig))/std(binAveSig);
+    binAveZScores = binAveSig;
 
     %map the firing rates into the actual bins within the grid now (using
     %the bin labels as the index). Only the bins with anything in them are
@@ -231,8 +266,6 @@ for iNeuron = 1:size(reducFRsNoNans,1)
 
     figH = figure('Visible','off','Units','pixels','OuterPosition',[200 50 500 1000]);
     tiledlayout(2,1,"TileSpacing","tight")
-%     nexttile
-%     imagesc(xx, yy, spaceAveZScores)
     nexttile
     imagesc(gridIndsX, gridIndsY, fliplr(spaceAveZScoresFilt'))
     hold on
@@ -243,43 +276,59 @@ for iNeuron = 1:size(reducFRsNoNans,1)
 %     ylim([-9,7])
 %     xlim([-12,8])
 %     ylim([-8,12])
-    xlim([-4,8])
-    ylim([-10,6])
+%     xlim([-4,8])
+%     ylim([-10,6])
+%     xlim([-10,10])
+%     ylim([-6,9])
 
-    if iNeuron > length(striatumInds)
-        region = 'Cortex';
-        neuronNum = iNeuron - length(striatumInds);
-    else
-        region = 'Striatum';
-        neuronNum = iNeuron;
+    % naming scheme
+    switch lower(activityType)
+
+        case 'firingrate'
+            if iChan > length(striatumInds)
+                region = 'Cortex';
+                neuronNum = iChan - length(striatumInds);
+            else
+                region = 'Striatum';
+                neuronNum = iChan;
+            end
+            title([region ', Neuron ' num2str(neuronNum)])
+
     end
-    title([region ', Neuron ' num2str(neuronNum)])
 
-    %now the average firing rate within each of the divided regions
+    %now the average activity within each of the divided regions
     watershedRegionsAdj = watershedRegions';
     watershedRegionsBins = watershedRegionsAdj(:);
     reducWatershedRegions = watershedRegionsBins(binLabels);
 
-    regionWatershedLabelsCat = cat(2,regionWatershedLabels{:});
+    if iscell(regionWatershedLabels)
+        regionWatershedLabelsCat = cat(2,regionWatershedLabels{:});
+    else
+        regionWatershedLabelsCat = regionWatershedLabels;
+    end
+
     for iShedRegion = 1:length(regionWatershedLabelsCat)
         shedReducInds = find(reducWatershedRegions == regionWatershedLabelsCat(iShedRegion));
-        neuronReducFR = reducFRsNoNans(iNeuron,shedReducInds);
-        regionAveFRs(iNeuron,iShedRegion) = mean(neuronReducFR)*1000;
-        neuronReducFRNonZeros = neuronReducFR(neuronReducFR ~= 0);
-        regionPrctFRs(iNeuron,iShedRegion) = prctile(neuronReducFRNonZeros,90)*1000;
+        shedReducSigs = reducSigs(iChan,shedReducInds);
+        regionAveSigs(iChan,iShedRegion) = mean(shedReducSigs)*1000;
+        shedReducSigsNonZeros = shedReducSigs(shedReducSigs ~= 0);
+        regionPrctSigs(iChan,iShedRegion) = prctile(shedReducSigsNonZeros,90)*1000;
 
         %get the bins at which the points are in
         regionFiltValues = spaceAveZScoresFilt(binLabels(shedReducInds));
         %and average across that instead
-        regionAveFRFilt(iNeuron,iShedRegion) = mean(regionFiltValues);
-        neuronReducFRNonZeros = regionFiltValues(regionFiltValues ~= 0);
-        regionPrctFRFilt(iNeuron,iShedRegion) = prctile(regionFiltValues,99);
+        regionAveSigsFilt(iChan,iShedRegion) = mean(regionFiltValues);
+        regionFiltValuesNonZeros = regionFiltValues(regionFiltValues ~= 0);
+        regionPrctSigsFilt(iChan,iShedRegion) = prctile(regionFiltValuesNonZeros,99);
     end
 
     nexttile
-    plot(regionAveFRFilt(iNeuron,:))
+    plot(regionAveSigsFilt(iChan,:))
     hold on
-    plot(regionAveFRs(iNeuron,:))
+    plot(regionAveSigs(iChan,:))
+    plot(regionPrctSigsFilt(iChan,:))
+    legend('Filtered Average','Value Averaged','Filtered 99 Percentile','box','off')
+
 
     saveas(figH,['./UMAPFRs/' region '_Neuron' num2str(neuronNum) '.png'])
     close(figH)
@@ -288,45 +337,50 @@ end
 
 % also do permutation test and do the same calculations
 % do permutation shuffles for ssa and neurons
-nShuff = 200;
-nTotalInds = size(reducFRsNoNans,2);
+nTotalInds = size(reducSigs,2);
 for iShuff = 1:nShuff   
     
 %     indShuff = randperm(nTotalInds);
 %     reducFRsNoNansShuff = reducFRsNoNans(:,indShuff);
 
-    randShift(iShuff) = randperm(size(reducFRsNoNans,2),1);
-    reducFRsNoNansShuff = circshift(reducFRsNoNans,randShift(iShuff),2);
+    randShift(iShuff) = randperm(size(reducSigs,2),1);
+
+    %shift should be at least 30 seconds away from original time point
+    while randShift(iShuff) < 30000 && randShift(iShuff) > size(reducSigs,2)-30000
+        randShift(iShuff) = randperm(size(reducSigs,2),1);
+    end
+
+    reducSigsShuff = circshift(reducSigs,randShift(iShuff),2);
 
     tic
-    for iNeuron = 1:size(reducFRsNoNans,1)
+    for iChan = 1:size(reducSigs,1)
 
-        binFRSums = accumarray(binLabels,reducFRsNoNansShuff(iNeuron,:));
-        binAveFRs = binFRSums(accumarrayRealOutputs)./binNPoints(accumarrayRealOutputs)*1000;
+        binSigSums = accumarray(binLabels,reducSigsShuff(iChan,:));
+        binAveSig = binSigSums(accumarrayRealOutputs)./binNPoints(accumarrayRealOutputs)*1000;
 
         spaceAveZScores = zeros(nGridPoints,nGridPoints);
-        binAveZScores = (binAveFRs - mean(binAveFRs))/std(binAveFRs);
-        binAveZScores = binAveFRs;
+        binAveZScores = (binAveSig - mean(binAveSig))/std(binAveSig);
+        binAveZScores = binAveSig;
 
         spaceAveZScores(unique(binLabels)) = binAveZScores;
 
         spaceAveZScoresFilt = fftshift(real(ifft2(fft2(gaussKernal).*fft2(spaceAveZScores))));
 
-        regionWatershedLabelsCat = cat(2,regionWatershedLabels{:});
+        regionWatershedLabelsCat = regionWatershedLabels;
         for iShedRegion = 1:length(regionWatershedLabelsCat)
             shedReducInds = find(reducWatershedRegions == regionWatershedLabelsCat(iShedRegion));
-            neuronReducFR = reducFRsNoNansShuff(iNeuron,shedReducInds);
-            regionAveFRsShuff(iNeuron,iShedRegion,iShuff) = mean(neuronReducFR)*1000;
-            neuronReducFRNonZeros = neuronReducFR(neuronReducFR ~= 0);
-            regionPrctFRsShuff(iNeuron,iShedRegion,iShuff) = prctile(neuronReducFRNonZeros,90)*1000;
+            shedReducSigs = reducSigsShuff(iChan,shedReducInds);
+            regionAveSigsShuff(iChan,iShedRegion,iShuff) = mean(shedReducSigs)*1000;
+            shedReducSigsNonZeros = shedReducSigs(shedReducSigs ~= 0);
+            regionPrctSigsShuff(iChan,iShedRegion,iShuff) = prctile(shedReducSigsNonZeros,90)*1000;
 
             %get the bins at which the points are in
             regionFiltValues = spaceAveZScoresFilt(binLabels(shedReducInds));
 
             %and average across that instead
-            regionAveFRFiltShuff(iNeuron,iShedRegion,iShuff) = mean(regionFiltValues);
-            neuronReducFRNonZeros = regionFiltValues(regionFiltValues ~= 0);
-            regionPrctFRFiltShuff(iNeuron,iShedRegion,iShuff) = prctile(regionFiltValues,99);
+            regionAveSigsFiltShuff(iChan,iShedRegion,iShuff) = mean(regionFiltValues);
+            regionFiltValuesNonZeros = regionFiltValues(regionFiltValues ~= 0);
+            regionPrctSigsFiltShuff(iChan,iShedRegion,iShuff) = prctile(regionFiltValuesNonZeros,99);
         end
 
     end
