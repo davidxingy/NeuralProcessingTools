@@ -47,22 +47,22 @@ pointsToUse(behvLabelsNoArt == 0,:) = [];
 behvLabelsNoBack = behvLabelsNoArt;
 behvLabelsNoBack(behvLabelsNoArt == 0) = [];
 
-reducLimsX1 = min(min(reduction(:,2)))*1.5;
-reducLimsX2 = max(max(reduction(:,2)))*1.5;
-reducLimsY1 = min(min(reduction(:,1)))*1.5;
-reducLimsY2 = max(max(reduction(:,1)))*1.5;
+reducLimsX1 = min(min(reduction(:,1)))*1.5-2;
+reducLimsX2 = max(max(reduction(:,1)))*1.5+2;
+reducLimsY1 = min(min(reduction(:,2)))*1.5-2;
+reducLimsY2 = max(max(reduction(:,2)))*1.5+2;
 
-[gridInds,density] = findPointDensity(pointsToUse,densityGaussStd,nGridPoints,[reducLimsX1 reducLimsX2 reducLimsY1 reducLimsY2]);
+[gridXInds,gridYInds, density] = findPointDensity(pointsToUse,densityGaussStd,nGridPoints,[reducLimsX1 reducLimsX2 reducLimsY1 reducLimsY2]);
 densityNormalized = (max(max(density))-density)/max(max(density));
-densityNormalizedProcessed = imhmin(densityNormalized,0.15);
+densityNormalizedProcessed = imhmin(densityNormalized,0.1);
 watershedRegions = watershed(densityNormalizedProcessed);
 
 figH = figure;
 axH = axes('Parent', figH);
 
 % plot the density
-imagesc(gridInds,gridInds,density)
-[boundaryXs,boundaryYs] = find(watershedRegions==0);
+imagesc(gridXInds,gridYInds,density)
+[boundaryYs,boundaryXs] = find(watershedRegions==0);
 hold on
 % also plot the labeled points
 colormap = turbo(length(analyzedBehaviors));
@@ -70,7 +70,7 @@ for iBehv = 1:length(analyzedBehaviors)
     plot(reduction(behvLabelsNoArt==iBehv,1),reduction(behvLabelsNoArt==iBehv,2),'.','color',colormap(iBehv,:),'MarkerSize',2)
 end
 % plot watershed boundaries
-plot(gridInds(boundaryYs),gridInds(boundaryXs),'k.')
+plot(gridXInds(boundaryXs),gridYInds(boundaryYs),'k.')
 set(gca,'ydir','normal')
 
 
