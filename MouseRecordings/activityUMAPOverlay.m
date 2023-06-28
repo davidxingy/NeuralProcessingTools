@@ -48,7 +48,7 @@ else
 end
 
 % load UMAP projection
-load(fullfile(baseDir,'ProcessedData','UMAP.mat'),'reduction','origDownsampEMGInd','gridInds','watershedRegions','regionWatershedLabels')
+load(fullfile(baseDir,'ProcessedData','UMAP.mat'),'reduction','origDownsampEMGInd','gridXInds','gridYInds','watershedRegions','regionWatershedLabels')
 
 % load in sync data
 load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
@@ -112,17 +112,17 @@ end
 [regionBoundaryIndsX, regionBoundaryIndsY] = find(watershedRegions==0);
 
 % Generate grid
-nGridPoints = length(gridInds);
+nGridPoints = length(gridXInds);
 rangeVals = [min(reduction(reducIndsToUse,1)) max(reduction(reducIndsToUse,1)); ...
     min(reduction(reducIndsToUse,2)) max(reduction(reducIndsToUse,2))]*1.5;
 
-gridIndsX = gridInds;
-gridIndsY = gridInds;
+gridIndsX = gridXInds;
+gridIndsY = gridYInds;
 [meshGridX,meshGridY] = meshgrid(gridIndsX,gridIndsY);
 
 % get the gaussian kernal to convolve with for better visualization
 densityGaussStd = 0.3;
-gaussKernal = exp(-.5.*(meshGridX.^2 + meshGridY.^2)./densityGaussStd^2) ./ (2*pi*densityGaussStd^2);
+gaussKernal = exp(-.5.*((meshGridX-mean([max(max(meshGridX)) min(min(meshGridX))])).^2 + (meshGridY-mean([max(max(meshGridY)) min(min(meshGridY))])).^2)./densityGaussStd^2) ./ (2*pi*densityGaussStd^2);
 gaussKernal = gaussKernal./(sum(sum(gaussKernal)));
 
 % for each point in the UMAP reduction, get the bin which it belongs to when doing 2D binning using the grid points 
@@ -270,9 +270,9 @@ for iChan = 1:size(reducSigs,1)
     figH = figure('Visible','off','Units','pixels','OuterPosition',[200 50 500 1000]);
     tiledlayout(2,1,"TileSpacing","tight")
     nexttile
-    imagesc(gridIndsX, gridIndsY, fliplr(spaceAveZScoresFilt'))
+    imagesc(gridIndsX, gridIndsY, spaceAveZScoresFilt')
     hold on
-    plot(-1*(gridIndsX(regionBoundaryIndsY)),gridIndsY(regionBoundaryIndsX),'k.')
+    plot((gridIndsX(regionBoundaryIndsY)),gridIndsY(regionBoundaryIndsX),'k.')
     colorbar
 
 %     xlim([-12.5,9])
