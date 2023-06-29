@@ -83,8 +83,8 @@ for iRegion = 1:nRegions
     while contGettingPoints
         
         selectedPoint = ginput(1);
-        [~, xPoint] = min(abs(selectedPoint(1)-gridInds));
-        [~, yPoint] = min(abs(selectedPoint(2)-gridInds));
+        [~, xPoint] = min(abs(selectedPoint(1)-gridXInds));
+        [~, yPoint] = min(abs(selectedPoint(2)-gridYInds));
         watershedRegionsFlip = flipud(watershedRegions);
         regionWatershedLabels{iRegion}(iRegionSelection) = watershedRegions(yPoint,xPoint);
         iRegionSelection = iRegionSelection + 1;
@@ -93,7 +93,7 @@ for iRegion = 1:nRegions
         %to see what has already been selected)
         mask = zeros(nGridPoints,nGridPoints);
         mask(watershedRegions == watershedRegions(yPoint,xPoint)) = 1;
-        imagesc(gridInds, gridInds, watershedRegions/max(max(watershedRegions))/1000, 'AlphaData', mask);
+        imagesc(gridXInds, gridYInds, watershedRegions/max(max(watershedRegions))/1000, 'AlphaData', mask);
         morePointsInput = input('Select more points? [Y/N]: ','s');
         if strcmpi(morePointsInput,'y')
             contGettingPoints = 1;
@@ -142,8 +142,8 @@ end
 % assign regions to each time point in reduction by finding the closest
 % grid point to each of the points
 for iPoint = 1:size(reduction,1)
-    [~, minXInds(iPoint)] = min(abs(reduction(iPoint,1) - gridInds));
-    [~, minYInds(iPoint)] = min(abs(reduction(iPoint,2) - gridInds));
+    [~, minXInds(iPoint)] = min(abs(reduction(iPoint,1) - gridXInds));
+    [~, minYInds(iPoint)] = min(abs(reduction(iPoint,2) - gridYInds));
 end
 
 regionSpaceinds = sub2ind([size(watershedRegions,1),size(watershedRegions,2)],minYInds,minXInds);
@@ -239,7 +239,7 @@ end
 
 % save
 save(umapFile,'regionAssignments','regionAssignmentsNoBound','regionAssignmentsFiltered','regionBehvAssignments',...
-    'gridInds','watershedRegions','regionWatershedLabels','-append')
+    'gridXInds','gridYInds','watershedRegions','regionWatershedLabels','-append')
 
 
 % 
