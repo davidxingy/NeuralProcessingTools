@@ -2,66 +2,160 @@
 % selectivityAnalysis(baseDir)
 % function to calculate selectivity metrics from the UMAP regions activity overlay
 
+clear
 
-load(fullfile(baseDir,'ProcessedData','UMAPFRs','NeuronRegionProps.mat'))
-load(fullfile(baseDir,'ProcessedData','NeuralFiringRates1msBins10msGauss.mat'), 'cortexInds', 'striatumInds')
-load(fullfile(baseDir,'ProcessedData','UMAP.mat'), 'regionBehvAssignments','analyzedBehaviors')
-load(fullfile(baseDir,'ProcessedData','neuronDataStruct.mat'))
+% do analysis for each of the datasets
+recordingSessions = {
+    'Z:\David\ArenaRecordings\NeuropixelsTest\D020-062922-ArenaRecording', ...
+    'Z:\David\ArenaRecordings\NeuropixelsTest\D024-111022-ArenaRecording', ...
+    'X:\David\ArenaRecordings\D026-032923-ArenaRecording' ...
+};
 
-allInds = [striatumInds cortexInds];
-depths = [neuronDataStruct(allInds).depth];
-ts = {neuronDataStruct(allInds).timeStamps};
+behvAlignPerm = [
+    1 2 3 4 5 6 7; ...
+    7 6 3 5 4 2 1; ...
+    1 2 4 5 3 6 7 ...
+    ];
 
-if exist("regionAveSigs")
+for iSess = 1:length(recordingSessions)
+
+    baseDir = recordingSessions{iSess};
+    load(fullfile(baseDir,'ProcessedData','UMAPFRs','NeuronRegionProps.mat'))
+    load(fullfile(baseDir,'ProcessedData','NeuralFiringRates1msBins10msGauss.mat'), 'cortexInds', 'striatumInds')
+    load(fullfile(baseDir,'ProcessedData','UMAP.mat'), 'regionBehvAssignments','analyzedBehaviors')
+    load(fullfile(baseDir,'ProcessedData','neuronDataStruct.mat'))
+
+    allInds = [striatumInds cortexInds];
+    depths = [neuronDataStruct(allInds).depth];
+    ts = {neuronDataStruct(allInds).timeStamps};
+
+    % load in both neural and EMG selectivity metrics
     regionAveFRs = regionAveSigs;
     regionAveFRsShuff = regionAveSigsShuff;
+
+    load(fullfile(baseDir,'ProcessedData','UMAPFRs','MuscleRegionProps.mat'))
+
+    regionAveEMGs = regionAveSigs;
+    regionAveEMGsShuff = regionAveSigsShuff;
+
+    % get the names associated with each region
+    nRegions = size(regionAveFRs,2);
+    for iRegion = 1:nRegions
+        regionBehvNames{iSess,iRegion} = string(join(analyzedBehaviors(regionBehvAssignments{iRegion}),'/'));
+    end
+
+    % get both the multibehavior specificity and single behavior specificty for
+    % each neuron
+    fieldNames = {'str','ctx','emg'};
+    % do it for strialtal and cortical neurons as well as muscles
+    for iType = 1:length(fieldNames)
+
+        if iType == 1
+            regionAveVals.(fieldNames{iType}){iSess} = regionAveFRs(1:length(striatumInds),:);
+            regionAveValsShuff = regionAveFRsShuff(1:length(striatumInds),:,:);
+        elseif iType == 2
+            regionAveVals.(fieldNames{iType}){iSess} = regionAveFRs(length(striatumInds)+1:end,:);
+            regionAveValsShuff = regionAveFRsShuff(length(striatumInds)+1:end,:,:);
+        elseif iType == 3
+            regionAveVals.(fieldNames{iType}){iSess} = regionAveEMGs;
+            regionAveValsShuff = regionAveEMGsShuff;
+        end
+
+        multiBehvSpec.(fieldNames{iType}){iSess} = calcMultiBehvSpec(regionAveVals.(fieldNames{iType}){iSess});
+        multiBehvSpecShuff.(fieldNames{iType}){iSess} = calcMultiBehvSpec(regionAveValsShuff);
+        [singleBehvSpec.(fieldNames{iType}){iSess}, allSingleBehvSpec.(fieldNames{iType}){iSess}, singleBehvSpecRegion.(fieldNames{iType}){iSess}] = calcSingleBehvSpec2(regionAveFRs);
+        [singleBehvSpecShuff.(fieldNames{iType}){iSess}, allSingleBehvSpecShuff.(fieldNames{iType}){iSess}, singleBehvSpecRegionShuff.(fieldNames{iType}){iSess}] = calcSingleBehvSpec2(regionAveFRsShuff);
+
+        % correct for low firing rate neurons
+        allSingleBehvSpecCorrected.(fieldNames{iType}){iSess} = allSingleBehvSpec.(fieldNames{iType}){iSess} - squeeze(nanmean(allSingleBehvSpecShuff.(fieldNames{iType}){iSess}));
+        singleBehvSpecCorrected.(fieldNames{iType}){iSess} = singleBehvSpec.(fieldNames{iType}){iSess} - nanmean(singleBehvSpecShuff.(fieldNames{iType}){iSess});
+        allMultiBehvSpecCorrected.(fieldNames{iType}){iSess} = multiBehvSpec.(fieldNames{iType}){iSess} - nanmean(multiBehvSpecShuff.(fieldNames{iType}){iSess},2);
+
+        %calc CDF for the multibehavioral selectivity
+        multiSpecCdfVals = -0.4:0.02:1;
+        multiSpecCdfFreq.(fieldNames{iType}){iSess} = calcCDF(allMultiBehvSpecCorrected.(fieldNames{iType}){iSess},multiSpecCdfVals);
+
+    end
+
 end
 
-nRegions = size(regionAveFRs,2);
-for iRegion = 1:nRegions
-    regionBehvNames{iRegion} = string(join(analyzedBehaviors(regionBehvAssignments{iRegion}),'/'));
-end
+% make summary plot for multibehavior selectivity
 
-multiBehvSpec = calcMultiBehvSpec(regionAveFRs);
-multiBehvSpecShuff = calcMultiBehvSpec(regionAveFRsShuff);
-[singleBehvSpec, allSingleBehvSpec, singleBehvSpecRegion] = calcSingleBehvSpec2(regionAveFRs);
-[singleBehvSpecShuff, allSingleBehvSpecShuff, singleBehvSpecRegionShuff] = calcSingleBehvSpec2(regionAveFRsShuff);
+allSessStrSpec = cat(1,multiSpecCdfFreq.str{:});
+allSessCtxSpec = cat(1,multiSpecCdfFreq.ctx{:});
+allSessEmgSpec = cat(1,multiSpecCdfFreq.emg{:});
 
-allSingleBehvSpecCorrected = allSingleBehvSpec - squeeze(nanmean(allSingleBehvSpecShuff));
-singleBehvSpecCorrected = singleBehvSpec - nanmean(singleBehvSpecShuff);
-allMultiBehvSpecCorrected = multiBehvSpec - nanmean(multiBehvSpecShuff,2);
-
-strSpec = sortrows([allMultiBehvSpecCorrected(1:length(striatumInds))...
-    singleBehvSpecCorrected(1:length(striatumInds))'...
-    (1:length(striatumInds))' singleBehvSpecRegion(1:length(striatumInds))']);
-strSpec(isnan(strSpec(:,1)),:) = [];
-[cdfFreqStr, cdfSpecStr] = ecdf(strSpec(:,1));
-
-ctxSpec = sortrows([allMultiBehvSpecCorrected(length(striatumInds)+1:end)...
-    singleBehvSpecCorrected(length(striatumInds)+1:end)'...
-    (length(striatumInds)+1:length(multiBehvSpec))' singleBehvSpecRegion(length(striatumInds)+1:end)']);
-ctxSpec(isnan(ctxSpec(:,1)),:) = [];
-[cdfFreqCtx, cdfSpecCtx] = ecdf(ctxSpec(:,1));
-
+plotColors = lines(3);
 figure;
-cdfplot(strSpec(:,1))
-set(get(gca,'Children'),'Color','k')
-hold on
-cdfplot(ctxSpec(:,1))
-set(get(gca,'Children'),'Color','k')
+hold on;
+for iSess = 1:length(recordingSessions)
+    firstHitMax = find(allSessStrSpec(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessStrSpec(iSess,1:firstHitMax),'Color',[plotColors(2,:) 0.2],'LineWidth',1.5);
 
-plotColors = lines(7);
-for iRegion = 1:7
-    
-    regionNeurons = find(strSpec(:,4)==iRegion);
-    plotH(iRegion) = plot(cdfSpecStr(regionNeurons),cdfFreqStr(regionNeurons),'.','MarkerSize',10,'color',plotColors(iRegion,:));
+    firstHitMax = find(allSessCtxSpec(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessCtxSpec(iSess,1:firstHitMax),'Color',[plotColors(1,:) 0.2],'LineWidth',1.5);
 
-    regionNeurons = find(ctxSpec(:,4)==iRegion);
-    plot(cdfSpecCtx(regionNeurons),cdfFreqCtx(regionNeurons),'.','MarkerSize',10,'color',plotColors(iRegion,:));
-
+    firstHitMax = find(allSessEmgSpec(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessEmgSpec(iSess,1:firstHitMax),'Color',[plotColors(3,:) 0.2],'LineWidth',1.5);
 end
 
-legend(plotH,regionBehvNames,'box', 'off')
+firstHitMax = find(mean(allSessStrSpec)==1,1);
+legH(1) = plot(multiSpecCdfVals(1:firstHitMax),mean(allSessStrSpec(:,1:firstHitMax)),'Color',plotColors(2,:),'LineWidth',3);
+firstHitMax = find(mean(allSessCtxSpec)==1,1);
+legH(2) = plot(multiSpecCdfVals(1:firstHitMax),mean(allSessCtxSpec(:,1:firstHitMax)),'Color',plotColors(1,:),'LineWidth',3);
+firstHitMax = find(mean(allSessEmgSpec)==1,1);
+legH(3) = plot(multiSpecCdfVals(1:firstHitMax),mean(allSessEmgSpec(:,1:firstHitMax)),'Color',plotColors(3,:),'LineWidth',3);
+
+legend(legH,'Striatum','Cortex','Muscles','box','off','fontsize',13)
+xlabel('Adjusted Skew Metric')
+ylabel('Frequency')
+box off
+set(gcf,'color','w')
+set(gca,'LineWidth',1.5)
+set(gca,'fontsize',13)
+set(gca,'TickDir','out')
+
+% % plotting region of highest specificity
+% plotColors = lines(7);
+% for iRegion = 1:7
+%     
+%     regionNeurons = find(strSpec(:,4)==iRegion);
+%     plotH(iRegion) = plot(cdfSpecStr(regionNeurons),cdfFreqStr(regionNeurons),'.','MarkerSize',10,'color',plotColors(iRegion,:));
+% 
+%     regionNeurons = find(ctxSpec(:,4)==iRegion);
+%     plot(cdfSpecCtx(regionNeurons),cdfFreqCtx(regionNeurons),'.','MarkerSize',10,'color',plotColors(iRegion,:));
+% 
+% end
+
+% make example plot of all neurons sorted by region
+for iSess = 1:length(recordingSessions)
+    strAligned{iSess} = regionAveVals.str{iSess}(:,behvAlignPerm(iSess,:));
+    ctxAligned{iSess} = regionAveVals.ctx{iSess}(:,behvAlignPerm(iSess,:));
+end
+
+strAll = cat(1,strAligned{:});
+maxSortPermStr = sortByLevelRecursive(strAll);
+plotDataStr = strAll(maxSortPermStr,:)./sum(strAll(maxSortPermStr,:),2);
+plotDataStr(any(isnan(plotDataStr),2),:) = [];
+
+ctxAll = cat(1,ctxAligned{:});
+maxSortPermCtx = sortByLevelRecursive(ctxAll);
+plotDataCtx = ctxAll(maxSortPermCtx,:)./sum(ctxAll(maxSortPermCtx,:),2);
+plotDataCtx(any(isnan(plotDataCtx),2),:) = [];
+
+figure
+imagesc([plotDataStr; plotDataCtx])
+colorbar
+hold on
+line([0 7.5],[size(plotDataStr,1) size(plotDataStr,1)],'linewidth',2,'color','r','linestyle','--')
+
+title('Behavioral Selectivities')
+ylabel('Neuron')
+set(gca,'XTickLabel',regionBehvNames(1,:))
+set(gca,'XTickLabelRotation',90)
+set(gcf,'Color','w')
+
+
 
 % look correlation across behaviors
 
@@ -244,8 +338,48 @@ end
 
 
 function multiBehvSpec = calcMultiBehvSpec(regionMetrics)
+
 regionMetricsNormalized = (regionMetrics./sum(regionMetrics,2));
 multiBehvSpec = squeeze(sum(regionMetricsNormalized.^2,2));
+
+end
+
+
+function freq = calcCDF(inputData,range)
+
+% remove nans
+inputData(isnan(inputData)) = [];
+
+for i = 1:length(range)
+
+    freq(i) = sum(inputData <= range(i)) / length(inputData);
+
+end
+
+end
+
+
+
+function sortPerm = sortByLevelRecursive(data)
+
+[~, maxRegion] = max(data,[],2);
+maxSortTable = sortrows([maxRegion,(1:length(maxRegion))']);
+sortPerm = maxSortTable(:,2);
+
+if size(data,2) == 1
+    return
+end
+
+for iSub = 1:size(data,2)
+
+    subInds = find(maxSortTable(:,1)==iSub);
+    subLevelData = data(sortPerm(subInds),:);
+    subLevelData(:,iSub) = [];
+
+    subPerm = sortByLevelRecursive(subLevelData);
+    sortPerm(subInds) = sortPerm(subInds(subPerm));
+
+end
 
 end
 
