@@ -29,4 +29,6 @@ clear processedEMG
 clear filteredEMG
 
 % downsample
-downsampEMG = decimate(allEMG',downsampAmount)';
+for iChan = 1:size(allEMG,1)
+    downsampEMG(iChan,:) = decimate(allEMG(iChan,:),downsampAmount)';
+end
