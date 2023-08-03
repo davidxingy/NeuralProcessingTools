@@ -3,7 +3,11 @@ function [processedEMG,filteredEMG,syncInds] = processEMG(emgDir, baseFilename, 
 allfiles = string(ls(emgDir));
 intanFiles = allfiles(cellfun(@(x) contains(x,'.rhd'),string(allfiles)));
 channelInds = [1:16];
-channelNames = {'Right Biceps','Right Triceps', 'Right ECR', 'Right PL', 'Right TA', 'Right Gastr', 'Left Triceps','Left Biceps'};
+% channelNames = {'Right Biceps','Right Triceps', 'Right ECR', 'Right PL', 'Right TA', 'Right Gastr', 'Left Triceps','Left Biceps'};
+channelNames = {'Biceps Ch1','Biceps Ch2','Biceps Ch3','Biceps Ch4',...
+    'Triceps Ch1','Triceps Ch2','Triceps Ch3','Triceps Ch4',...
+    'ECR Ch1','ECR Ch2','ECR Ch3','ECR Ch4',...
+    'PL Ch1','PL Ch2','PL Ch3','PL Ch4'};
 
 if nargin == 3
     fileBreakSize = varargin{1};
@@ -20,13 +24,21 @@ for iFile = 1:length(intanFiles)
     fileNumSamples(iFile) = size(outputData.amplifier_data,2);
     
     emgSig = outputData.amplifier_data(channelInds,:);
-    outputData.board_adc_data = zeros(4,size(outputData.amplifier_data,2));
+%     outputData.board_adc_data = zeros(4,size(outputData.amplifier_data,2));
     %get sync pulse indices
-    syncInds{iFile} = detectSyncPulse(outputData.board_adc_data(1,:),2.5)+sum(fileNumSamples)-fileNumSamples(end);
+    fileSyncPulses = detectSyncPulse(outputData.board_adc_data(1,:),2.5);
+    if ~isempty(fileSyncPulses)
+        syncInds{iFile} = fileSyncPulses + sum(fileNumSamples)-fileNumSamples(end);
+    end
+    [fileLaserOnset, fileLaserOffset] = detectSyncPulse(outputData.board_adc_data(2,:),2.5);
+    if ~isempty(fileLaserOnset)
+        laserOnsetInds{iFile} = fileLaserOnset + sum(fileNumSamples)-fileNumSamples(end);
+        laserOffsetInds{iFile} = fileLaserOffset + sum(fileNumSamples)-fileNumSamples(end);
+    end
     
     %get lick activations (so to remove voltage artifacts from the touch
     %sensor)
-    touchInds = detectTouchInds(outputData.board_adc_data(2:end,:),2.5);
+    touchInds = detectTouchInds(outputData.board_adc_data(3:end,:),2.5);
     
     %remove data from lick activations and replace with line
     if ~isempty(touchInds)
@@ -38,7 +50,14 @@ for iFile = 1:length(intanFiles)
     %even with the lick sensor, sometimes the animal appears to touch the
     %port without setting off the detector, so need some way to detect
     %artifacts based on the EMG signal
-    artInds = detectLickArtifacts(sigNoTouchArt,[],2,10000);
+
+    %with data from sober probes, could be a lot of baseline drift, run
+    %artifact detection on filtered data
+    [b,a] = butter(3,[100/10000],'high');
+    lickTouchFiltSig = filtfilt(b,a,sigNoTouchArt');
+    lickThreshes = [1700 1000 1700 1700 1500 2000 2200 2000 2000 500 200 1000 1000 3000 1500 2000]';
+%     lickThreshes = [];
+    artInds = detectLickArtifacts(lickTouchFiltSig',lickThreshes,5,1);
     
     %remove data from lick activations and replace with line
     if ~isempty(artInds)
@@ -106,13 +125,15 @@ for iFile = 1:length(intanFiles)
             iSeg = 1;
         end
         
-        save([baseFilename '_ProcessedEMG_Block2_Part' num2str(iSaveFile)], 'processedEMG', 'filteredEMG')
+        save([baseFilename '_ProcessedEMG_Block2_Part' num2str(iSaveFile)], 'processedEMG', 'filteredEMG','-v7.3')
         iSaveFile = iSaveFile+1;
         
         if iFile == length(intanFiles)
             removedInds = [removedInds{:}];
             syncInds = [syncInds{:}];
-            save([baseFilename '_MetaData'],'removedInds','syncInds','fileNumSamples','channelNames');
+            laserOnsetInds = [laserOnsetInds{:}];
+            laserOffsetInds = [laserOffsetInds{:}];
+            save([baseFilename '_MetaData'],'removedInds','syncInds','fileNumSamples','channelNames','laserOnsetInds','laserOffsetInds','-v7.3');
         end
         
     else
@@ -133,9 +154,10 @@ end
 
 
 
-function risingEdges = detectSyncPulse(signal,thresh)
+function [risingEdges fallingEdges] = detectSyncPulse(signal,thresh)
 
 risingEdges = find(signal(2:end)>=thresh & signal(1:end-1)<thresh)+1;
+fallingEdges = find(signal(2:end)<=thresh & signal(1:end-1)>thresh)+1;
 
 end
 
@@ -185,12 +207,12 @@ function artInds = detectLickArtifacts(signals, thresh, minChans, minDuration)
 % criteron will be that at least some number of channels maintains a 
 % large voltage level constantly (i.e not oscilating) for a period of time
 if isempty(thresh)
-    %if no threshold given, then just use the 90th percentile
-    threshMat = repmat(prctile(signals',90)', 1, size(signals,2));
+    %if no threshold given, then just use the 99.5th percentile
+    threshMat = repmat(prctile(signals',99.9)', 1, size(signals,2));
 else
-    threshMat = repmat(thresh,size(signals,1),size(signals,2));
+    threshMat = repmat(thresh,1,size(signals,2));
 end
-  
+
 threshCrossings = abs(signals) > threshMat;
 
 multiThreshCrossings = double(sum(threshCrossings,1) >= minChans);
@@ -204,7 +226,7 @@ artLengths = segLengths(artSegs);
 artSegInds = {};
 for iSeg = 1:length(artStartInds)
     
-    artSegInds{iSeg} = artStartInds(iSeg)-2000:artStartInds(iSeg)+artLengths(iSeg)+2000;
+    artSegInds{iSeg} = artStartInds(iSeg)-2000:artStartInds(iSeg)+artLengths(iSeg)+3000;
     
 end
 
