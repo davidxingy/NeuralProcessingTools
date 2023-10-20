@@ -25,10 +25,16 @@ load(fullfile(baseDir,'ProcessedData', metaDataFile))
 windowSize = 200;
 pulseWindowStarts = [];
 pulseWindowEnds= [];
+
+controlPulseWindowStarts = [];
+controlPulseWindowEnds = [];
 for iPulse = 1:length(downsampleLaserOnsetInds)
     stimWindow{iPulse} = downsampleLaserOnsetInds(iPulse):downsampleLaserOnsetInds(iPulse)+windowSize;
-    pulseWindowStarts(iPulse) = downsampleLaserOnsetInds;
+    pulseWindowStarts(iPulse) = downsampleLaserOnsetInds(iPulse);
     pulseWindowEnds(iPulse) = downsampleLaserOnsetInds(iPulse)+windowSize;
+    
+    controlPulseWindowStarts(iPulse) = downsampleLaserOnsetInds(iPulse)-windowSize;
+    controlPulseWindowEnds(iPulse) = downsampleLaserOnsetInds(iPulse);
 end
 allStimWindowInds = unique(cat(2,stimWindow{:}));
 
@@ -51,43 +57,76 @@ reducEMGInds = origDownsampEMGInd;
 stimUseInds = {}; 
 for iPulse = 1:length(pulseWindowStarts)
 
-    stimUseInds{iPulse} = origDownsampEMGInd>pulseWindowStarts(iPulse) & origDownsampEMGInd<pulseWindowStarts(iPulse);
+    stimUseInds{iPulse} = find(origDownsampEMGInd>pulseWindowStarts(iPulse) & origDownsampEMGInd<pulseWindowEnds(iPulse));
+    stimControlInds{iPulse} = find(origDownsampEMGInd>controlPulseWindowStarts(iPulse) & origDownsampEMGInd<controlPulseWindowEnds(iPulse));
 
 end
 
 stimUseInds = cat(2,stimUseInds{:});
 stimNoUseInds = setdiff(1:length(origDownsampEMGInd),stimUseInds);
 
+stimControlInds = cat(2,stimControlInds{:});
+stimControlNoUseInds = setdiff(1:length(origDownsampEMGInd),stimControlInds);
+
 origDownsampEMGIndStim = origDownsampEMGInd(stimUseInds);
 origDownsampEMGIndNoStim = origDownsampEMGInd(stimNoUseInds);
+
+origDownsampEMGIndStimControl = origDownsampEMGInd(stimControlInds);
+origDownsampEMGIndNoStimControl = origDownsampEMGInd(stimControlNoUseInds);
 
 emgStim = downsampEMG(:,origDownsampEMGIndStim);
 emgNoStim = downsampEMG(:,origDownsampEMGIndNoStim);
 
+emgStimControl = downsampEMG(:,origDownsampEMGIndStimControl);
+emgNoStimControl = downsampEMG(:,origDownsampEMGIndNoStimControl);
+
 % get subsample to build null distribution
-nShuffs = 200;
+nShuffs = 100;
 for iShuff = 1:nShuffs
     shuffInds = randperm(length(stimNoUseInds),length(stimUseInds));
     emgNoStimShuff{iShuff} = downsampEMG(:,origDownsampEMGIndNoStim(shuffInds));
     stimNoUseShuffInds{iShuff} = stimNoUseInds(shuffInds);
+    
+    shuffInds = randperm(length(stimControlNoUseInds),length(stimControlInds));
+    emgNoStimShuffControl{iShuff} = downsampEMG(:,origDownsampEMGIndNoStimControl(shuffInds));
+    stimNoUseShuffIndsControl{iShuff} = stimControlNoUseInds(shuffInds);
 end
 
-densityGaussStd = 0.3;
-[heatMapStim, heatMapFiltStim] = calcActivityMap(baseDir,emgStim,stimUseInds,densityGaussStd);
+densityGaussStd = 0.2;
+
+[heatMapStim, heatMapFiltStim, gaussKernal] = calcActivityMap(baseDir,emgStim,stimUseInds,densityGaussStd);
 [heatMapNoStim, heatMapFiltNoStim] = calcActivityMap(baseDir,emgNoStim,stimNoUseInds,densityGaussStd);
 
-heatMapDiff = heatMapFiltNoStim - heatMapFiltStim;
+[heatMapStimControl, heatMapFiltStimControl, gaussKernal] = calcActivityMap(baseDir,emgStimControl,stimControlInds,densityGaussStd);
+[heatMapNoStimControl, heatMapFiltNoStimControl] = calcActivityMap(baseDir,emgNoStimControl,stimControlNoUseInds,densityGaussStd);
+
+heatMapDiff = heatMapNoStim - heatMapStim;
+heatMapDiffControl = heatMapNoStimControl - heatMapStimControl;
+
+for iChan = 1:size(heatMapDiff,3)
+    heatMapDiffFilt(:,:,iChan) = fftshift(real(ifft2(fft2(gaussKernal).*fft2(heatMapDiff(:,:,iChan)))));
+end
 
 for iShuff = 1:nShuffs
-    [~, heatMapFiltShuff(:,:,:,iShuff)] = calcActivityMap(baseDir,emgNoStimShuff{iShuff},stimNoUseShuffInds{iShuff},densityGaussStd);
-    heatMapShuffDiff(:,:,:,iShuff) = heatMapFiltNoStim - heatMapFiltShuff(:,:,:,iShuff);
+    [heatMapShuff(:,:,:,iShuff), heatMapFiltShuff(:,:,:,iShuff)] = ...
+        calcActivityMap(baseDir,emgNoStimShuff{iShuff},stimNoUseShuffInds{iShuff},densityGaussStd);
+    heatMapShuffDiff(:,:,:,iShuff) = heatMapNoStim - heatMapShuff(:,:,:,iShuff);
+    
+    for iChan = 1:size(heatMapShuffDiff,3)
+        heatMapShuffDiffFilt(:,:,iChan,iShuff) = fftshift(real(ifft2(fft2(gaussKernal).*fft2(heatMapShuffDiff(:,:,iChan,iShuff)))));
+    end
+    
+    [heatMapShuffControl(:,:,:,iShuff), heatMapFiltShuffControl(:,:,:,iShuff)] = ...
+        calcActivityMap(baseDir,emgNoStimShuffControl{iShuff},stimNoUseShuffIndsControl{iShuff},densityGaussStd);
+    heatMapShuffDiffControl(:,:,:,iShuff) = heatMapNoStimControl - heatMapShuffControl(:,:,:,iShuff);
+    
 end
 
 figure
 tiledlayout(2,4)
 for iChan = 1:size(heatMapDiff,3)
     nexttile
-    imagesc(heatMapDiff(:,:,iChan))
+    imagesc(heatMapFiltNoStim(:,:,iChan))
     title(channelNames{iChan})
     colorbar
 end
@@ -96,21 +135,50 @@ figure
 tiledlayout(2,4)
 for iChan = 1:size(heatMapDiff,3)
     nexttile
-    diffMap = heatMapDiff(:,:,iChan) - mean(heatMapShuffDiff(:,:,iChan,:),4);
-    zScoreMap = diffMap./std(heatMapShuffDiff(:,:,iChan,:),[],4);
-    zScoreMap(std(heatMapShuffDiff(:,:,iChan,:),[],4)<30) = 0;
-    imagesc(zScoreMap)
+    imagesc(heatMapDiffFilt(:,:,iChan))
     title(channelNames{iChan})
     colorbar
 end
-                                                                            
+
+
+figure
+tiledlayout(2,4)
+for iChan = 1:size(heatMapDiff,3)
+    nexttile
+    diffMap = heatMapDiff(:,:,iChan) - nanmean(heatMapShuffDiff(:,:,iChan,:),4);
+    zScoreMap = diffMap./(nanstd(heatMapShuffDiff(:,:,iChan,:),[],4)+100);
+%     zScoreMap(std(heatMapShuffDiffFilt(:,:,iChan,:),[],4)<30) = 0;
+    zScoreMap(isnan(zScoreMap)) = 0;
+    zScoreMapFilt = fftshift(real(ifft2(fft2(gaussKernal).*fft2(zScoreMap))));
+%     imagesc(zScoreMap)
+    imagesc(zScoreMapFilt)
+    title(channelNames{iChan})
+    colorbar
+end
+              
+figure
+tiledlayout(2,4)
+for iChan = 1:size(heatMapDiff,3)
+    nexttile
+    diffMap = heatMapDiffControl(:,:,iChan) - nanmean(heatMapShuffDiffControl(:,:,iChan,:),4);
+    zScoreMap = diffMap./(nanstd(heatMapShuffDiffControl(:,:,iChan,:),[],4)+100);
+%     zScoreMap(std(heatMapShuffDiffFilt(:,:,iChan,:),[],4)<30) = 0;
+    zScoreMap(isnan(zScoreMap)) = 0;
+    zScoreMapFilt = fftshift(real(ifft2(fft2(gaussKernal).*fft2(zScoreMap))));
+    %     imagesc(zScoreMap)
+    imagesc(zScoreMapFilt)
+    title(channelNames{iChan})
+    colorbar
+end
+
+x=1;
 
 % 
 
 
 
-function [heatMap, heatMapFilt] = calcActivityMap(baseDir,reducSigs,reducIndsToUse,densityGaussStd)
-load(fullfile(baseDir,'ProcessedData','UMAP_Train.mat'),'reduction','origDownsampEMGInd','gridXInds','gridYInds','watershedRegions','annotatedBehvLabels')
+function [heatMap, heatMapFilt, gaussKernal] = calcActivityMap(baseDir,reducSigs,reducIndsToUse,densityGaussStd)
+load(fullfile(baseDir,'ProcessedData','UMAP.mat'),'reduction','origDownsampEMGInd','gridXInds','gridYInds','watershedRegions','annotatedBehvLabels')
 
 % get watershedding region splitting
 [regionBoundaryIndsX, regionBoundaryIndsY] = find(watershedRegions==0);
@@ -145,7 +213,7 @@ for iChan = 1:size(reducSigs,1)
     binSigSums = accumarray(binLabels,reducSigs(iChan,:));
     binAveSig = binSigSums(accumarrayRealOutputs)./binNPoints(accumarrayRealOutputs)*1000;
 
-    spaceAveZScores = zeros(nGridPoints,nGridPoints);
+    spaceAveZScores = nan(nGridPoints,nGridPoints);
     binAveZScores = (binAveSig - mean(binAveSig))/std(binAveSig);
     binAveZScores = binAveSig;
 
