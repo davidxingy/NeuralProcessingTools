@@ -2,12 +2,12 @@ function [processedEMG,filteredEMG,syncInds] = processEMG(emgDir, baseFilename, 
 
 allfiles = string(ls(emgDir));
 intanFiles = allfiles(cellfun(@(x) contains(x,'.rhd'),string(allfiles)));
-channelInds = [1:16];
-% channelNames = {'Right Biceps','Right Triceps', 'Right ECR', 'Right PL', 'Right TA', 'Right Gastr', 'Left Triceps','Left Biceps'};
-channelNames = {'Biceps Ch1','Biceps Ch2','Biceps Ch3','Biceps Ch4',...
-    'Triceps Ch1','Triceps Ch2','Triceps Ch3','Triceps Ch4',...
-    'ECR Ch1','ECR Ch2','ECR Ch3','ECR Ch4',...
-    'PL Ch1','PL Ch2','PL Ch3','PL Ch4'};
+channelInds = [1:8];
+channelNames = {'Right Biceps','Right Triceps', 'Right ECR', 'Right PL', 'Right Quad', 'Right TA', 'Left Triceps','Left ECR'};
+% channelNames = {'Biceps Ch1','Biceps Ch2','Biceps Ch3','Biceps Ch4',...
+%     'Triceps Ch1','Triceps Ch2','Triceps Ch3','Triceps Ch4',...
+%     'ECR Ch1','ECR Ch2','ECR Ch3','ECR Ch4',...
+%     'PL Ch1','PL Ch2','PL Ch3','PL Ch4'};
 
 if nargin == 3
     fileBreakSize = varargin{1};
@@ -31,15 +31,18 @@ for iFile = 1:length(intanFiles)
         syncInds{iFile} = fileSyncPulses + sum(fileNumSamples)-fileNumSamples(end);
     end
     [fileLaserOnset, fileLaserOffset] = detectSyncPulse(outputData.board_adc_data(2,:),2.5);
+    [fileLaserControlOnset, fileLaserControlOffset] = detectSyncPulse(outputData.board_adc_data(3,:),2.5);
     if ~isempty(fileLaserOnset)
         laserOnsetInds{iFile} = fileLaserOnset + sum(fileNumSamples)-fileNumSamples(end);
         laserOffsetInds{iFile} = fileLaserOffset + sum(fileNumSamples)-fileNumSamples(end);
+        controlOnsetInds{iFile} = fileLaserControlOnset + sum(fileNumSamples)-fileNumSamples(end);
+        controlOffsetInds{iFile} = fileLaserControlOffset + sum(fileNumSamples)-fileNumSamples(end);
     end
     
     %get lick activations (so to remove voltage artifacts from the touch
     %sensor)
     touchInds = detectTouchInds(outputData.board_adc_data(3:end,:),2.5);
-    
+    touchInds = [];%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %remove data from lick activations and replace with line
     if ~isempty(touchInds)
         sigNoTouchArt = replaceLinear(emgSig, touchInds);
@@ -55,8 +58,8 @@ for iFile = 1:length(intanFiles)
     %artifact detection on filtered data
     [b,a] = butter(3,[100/10000],'high');
     lickTouchFiltSig = filtfilt(b,a,sigNoTouchArt');
-    lickThreshes = [1700 1000 1700 1700 1500 2000 2200 2000 2000 500 200 1000 1000 3000 1500 2000]';
-%     lickThreshes = [];
+%     lickThreshes = [1200 1500 4000 1500 2200 4000 1900 4000 4000 200 300 1700 1500 4000 1300 4000]';
+    lickThreshes = [3000];
     artInds = detectLickArtifacts(lickTouchFiltSig',lickThreshes,5,1);
     
     %remove data from lick activations and replace with line
@@ -129,11 +132,14 @@ for iFile = 1:length(intanFiles)
         iSaveFile = iSaveFile+1;
         
         if iFile == length(intanFiles)
-            removedInds = [removedInds{:}];
+            removedInds = unique([removedInds{:}]);
             syncInds = [syncInds{:}];
             laserOnsetInds = [laserOnsetInds{:}];
             laserOffsetInds = [laserOffsetInds{:}];
-            save([baseFilename '_MetaData'],'removedInds','syncInds','fileNumSamples','channelNames','laserOnsetInds','laserOffsetInds','-v7.3');
+            controlOnsetInds = [controlOnsetInds{:}];
+            controlOffsetInds = [controlOffsetInds{:}];
+            save([baseFilename '_MetaData'],'removedInds','syncInds','fileNumSamples','channelNames',...
+                'controlOnsetInds','controlOffsetInds','laserOnsetInds','laserOffsetInds','-v7.3');
         end
         
     else
