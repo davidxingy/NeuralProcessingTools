@@ -28,6 +28,13 @@ for iVidChunk = 1:length(risingEdgeFrames)
         %(more or less might be detected due to occusion of the LED)
         %get number of pulses per train
         [segStartInds, segLengths] = findConstants(double(pulseDiffs'));
+        
+        wholeTrain = ones(1,length(segStartInds));
+        if pulseDiffs(1) == 1
+            segStartInds = [1 segStartInds];
+            segLengths = [1 segLengths];
+            wholeTrain = [0 wholeTrain];
+        end
         badTrains = find(segLengths+1 ~= nPulsesPerTrain);
         
         segStartInds = [segStartInds length(risingEdgeFrames{iVidChunk}{iVidFile})+1];
@@ -39,9 +46,25 @@ for iVidChunk = 1:length(risingEdgeFrames)
             if any(iTrain==badTrains)
                 %don't use this pulse train, remove it from the frame inds
                 removeFrameInds{iTrain} = segStartInds(iTrain):segStartInds(iTrain+1)-1;
-                syncTrainInd = syncTrainInd + 1;
+                if wholeTrain(iTrain)
+                    syncTrainInd = syncTrainInd + 1;
+                end
                 continue
             end
+            
+            %also make sure that the time between pulses is the same for each
+            %train (somtimes the led is blocked briefly for the first pulse)
+            pulseDurations = diff(risingEdgeFrames{iVidChunk}{iVidFile}(...
+                segStartInds(iTrain):segStartInds(iTrain+1)-1));
+            if length(unique(pulseDurations)) ~= 1
+                if length(unique(pulseDurations)) > 2 || diff(unique(pulseDurations)) ~= 1
+                    %don't use this pulse train, remove it from the frame inds
+                    removeFrameInds{iTrain} = segStartInds(iTrain):segStartInds(iTrain+1)-1;
+                    syncTrainInd = syncTrainInd + 1;
+                    continue
+                end
+            end
+            
         
             %add to the intan sample list of pulses
             iVidTrain{iTrain} = trainPulseIndsEMG{syncTrainInd};
@@ -64,7 +87,7 @@ for iVidChunk = 1:length(risingEdgeFrames)
         
         %for each video of the chunk, offset by total number of frames of
         %all the files that came before it
-        if iVidFile == 1
+        if iVidFile == 1    
             nOffsetFrames = 0;
         else
             nOffsetFrames = sum(nVidFrames{iVidChunk}(1:iVidFile-1));
