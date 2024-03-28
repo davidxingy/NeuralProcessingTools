@@ -13,6 +13,8 @@ allBehvAlignPerms = [
 
 behvRegionLabels = {'Climb Up','Climb Down','Jump Down/Across','Walk Flat/Grid','Rearing/Still','Grooming','Eating'};
 
+classifierMethod = 'randomforrest';
+
 for iSess = 1:length(sessionDirs)
 
     behvAlignPerm = allBehvAlignPerms(iSess,:);
@@ -20,30 +22,34 @@ for iSess = 1:length(sessionDirs)
 
     %load in spiking data
     % use 10ms bins
-    downsampleFactor = 10;
+    downsampleFactor = 100;
     load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
-
+    
     if downsampleFactor == 10
         load(fullfile(baseDir,'ProcessedData','NeuralFiringRates10msBins30msGauss.mat'),'allFRs','striatumInds','cortexInds');
+    elseif downsampleFactor == 50
+        load(fullfile(baseDir,'ProcessedData','NeuralFiringRates50msBins50msGauss.mat'),'allFRs','striatumInds','cortexInds');
+    elseif downsampleFactor == 100
+        load(fullfile(baseDir,'ProcessedData','NeuralFiringRates100msBins50msGauss.mat'),'allFRs','striatumInds','cortexInds');
     end
-
-     % load UMAP projection
+    
+    % load UMAP projection
     load(fullfile(baseDir,'ProcessedData','UMAP.mat'),'reduction','origDownsampEMGInd','gridXInds','gridYInds','regionAssignmentsFiltered','regionWatershedLabels')
 
-    %downsample the behavior labels to 10ms
-    %only keep 10ms bins where all 10 ms belong to a label
+    %downsample the behavior labels to 50ms
+    %only keep 50ms bins where all 50 ms belong to a label
     nDownSampBins = floor(length(regionAssignmentsFiltered)/downsampleFactor);
     regionAssignmentsFilteredReshape = reshape(regionAssignmentsFiltered(1:nDownSampBins*downsampleFactor),downsampleFactor,nDownSampBins);
     goodBins = find(all(regionAssignmentsFilteredReshape == mode(regionAssignmentsFilteredReshape)));
     
-    origDownsampEMGIndBinned = origDownsampEMGInd(goodBins*10-5);
-    regionAssignmentsFilteredBinned = regionAssignmentsFiltered(goodBins*10-5);
+    origDownsampEMGIndBinned = origDownsampEMGInd(goodBins*downsampleFactor-round(downsampleFactor/2));
+    regionAssignmentsFilteredBinned = regionAssignmentsFiltered(goodBins*downsampleFactor-round(downsampleFactor/2));
 
     %align neur data to reduction
     currentDir = pwd;
     cd(fullfile(baseDir,'ProcessedData'))
-    reducNeurInds = round(NeurEMGSync(origDownsampEMGIndBinned*20, frameEMGSamples, frameNeuropixelSamples, 'EMG')/300);
-    maxNeurSamples = round(frameNeuropixelSamples{1}{end}(end)/300)-1;
+    reducNeurInds = round(NeurEMGSync(origDownsampEMGIndBinned*20, frameEMGSamples, frameNeuropixelSamples, 'EMG')/(30*downsampleFactor));
+    maxNeurSamples = round(frameNeuropixelSamples{1}{end}(end)/(30*downsampleFactor))-1;
     reducIndsToUse = find(reducNeurInds < maxNeurSamples);
     cd(currentDir)
 
@@ -81,11 +87,11 @@ for iSess = 1:length(sessionDirs)
 %                 cvBlocks{i} = i:10:length(behvLabels);
 %             end
 
-        goodNeuronsStr = find(mean(reducFRs(1:length(striatumInds),:),2)*100>0.2);
+        goodNeuronsStr = find(mean(reducFRs(1:length(striatumInds),:),2)*(1000/downsampleFactor)>0.2);
         usedStrInds = 1:length(striatumInds);
         usedStrInds = usedStrInds(goodNeuronsStr);
 
-        goodNeuronsCtx = find(mean(reducFRs(length(striatumInds)+1:end,:),2)*100>0.2);
+        goodNeuronsCtx = find(mean(reducFRs(length(striatumInds)+1:end,:),2)*(1000/downsampleFactor)>0.2);
         usedCtxInds = length(striatumInds)+1:size(reducFRs,1);
         usedCtxInds = usedCtxInds(goodNeuronsCtx);
 
@@ -108,44 +114,56 @@ for iSess = 1:length(sessionDirs)
             %         ctxRFBlockAccuracy(iSess,iBlock) = sum(ctxRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
 
 
-                    % use kNN classifier
-            
-%                     features = reducFRs(usedStrInds,:);
-%                     strRFClassifier = fitcknn(features(:,trainInds)',behvLabels(trainInds),'NumNeighbors',100,'Standardize',1);
-%                     strRFPredLabels{iBlock} = str2double(string(predict(strRFClassifier,features(:,testInds)')));
-%                     strRFBlockAccuracy(iSess,iBlock) = sum(strRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
+            % do PCA as feature extraction step if needed
+            nHistory = 2;
+%             [strProj, strTraj, strVaf] = pca(addHistory(reducFRs(usedStrInds,:),nHistory)');
+%             [ctxProj, ctxTraj, ctxVaf] = pca(addHistory(reducFRs(usedCtxInds,:),nHistory)');
 % 
-%                     features = reducFRs(usedCtxInds,:);
-%                     ctxRFClassifier = fitcknn(features(:,trainInds)',behvLabels(trainInds),'NumNeighbors',100,'Standardize',1);
-%                     ctxRFPredLabels{iBlock} = str2double(string(predict(ctxRFClassifier,features(:,testInds)')));
-%                     ctxRFBlockAccuracy(iSess,iBlock) = sum(ctxRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
+%             [strProj, strTraj, strVaf] = pca(reducFRs(usedStrInds,:)');
+%             [ctxProj, ctxTraj, ctxVaf] = pca(reducFRs(usedCtxInds,:)');
+% 
+%             strFeatures = strTraj(:,1:find(cumsum(strVaf)/sum(strVaf)>0.9,1))';
+%             ctxFeatures = ctxTraj(:,1:find(cumsum(ctxVaf)/sum(ctxVaf)>0.9,1))';
 
+            % do classification
+            strFeatures = addHistory(reducFRs(usedStrInds,:),nHistory);
+            ctxFeatures = addHistory(reducFRs(usedCtxInds,:),nHistory);
 
-            % use multi-class LDA
+            % train
+            switch lower(classifierMethod)
+                case 'lda'
+                    strRFClassifier = fitcdiscr(strFeatures(:,trainInds)',behvLabels(trainInds));
+                    ctxRFClassifier = fitcdiscr(ctxFeatures(:,trainInds)',behvLabels(trainInds));
+                case 'knn'
+                    strRFClassifier = fitcknn(strFeatures(:,trainInds)',behvLabels(trainInds),'NumNeighbors',20,'Standardize',0);
+                    ctxRFClassifier = fitcknn(ctxFeatures(:,trainInds)',behvLabels(trainInds),'NumNeighbors',20,'Standardize',0);
+                case 'svm'
+                    strNBClassifier = fitcecoc(strFeatures(:,trainInds)',behvLabels(trainInds));
+                    ctxNBClassifier = fitcecoc(ctxFeatures(:,trainInds)',behvLabels(trainInds));
+                case 'randomforrest'
+                    strRFClassifier = TreeBagger(100,strFeatures(:,trainInds)',behvLabels(trainInds),...
+                        Method="classification", OOBPrediction="off");
+                    ctxRFClassifier = TreeBagger(100,ctxFeatures(:,trainInds)',behvLabels(trainInds),...
+                        Method="classification", OOBPrediction="off");
+            end
+
+            % test
             if iShift ==1
 
-                features = addHistory(reducFRs(usedStrInds,:),5,2,10);
-                strRFClassifier = fitcdiscr(features(:,trainInds)',behvLabels(trainInds));
-                strRFPredLabels{iBlock} = str2double(string(predict(strRFClassifier,features(:,testInds)')));
+                strRFPredLabels{iBlock} = str2double(string(predict(strRFClassifier,strFeatures(:,testInds)')));
                 strRFBlockAccuracy(iSess,iBlock) = sum(strRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
 
-                features = addHistory(reducFRs(usedCtxInds,:),5,2,10);
-                ctxRFClassifier = fitcdiscr(features(:,trainInds)',behvLabels(trainInds));
-                ctxRFPredLabels{iBlock} = str2double(string(predict(ctxRFClassifier,features(:,testInds)')));
+                ctxRFPredLabels{iBlock} = str2double(string(predict(ctxRFClassifier,ctxFeatures(:,testInds)')));
                 ctxRFBlockAccuracy(iSess,iBlock) = sum(ctxRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
 
                 testLabels{iBlock} = behvLabels(testInds);
 
             else
 
-                features = addHistory(reducFRs(usedStrInds,:),5,2,10);
-                strRFClassifier = fitcdiscr(features(:,trainInds)',behvLabels(trainInds));
-                strRFPredLabelsShift{iBlock,iShift-1} = str2double(string(predict(strRFClassifier,features(:,testInds)')));
+                strRFPredLabelsShift{iBlock,iShift-1} = str2double(string(predict(strRFClassifier,strFeatures(:,testInds)')));
                 strRFBlockAccuracyShift(iSess,iBlock,iShift-1) = sum(strRFPredLabelsShift{iBlock,iShift-1} == behvLabels(testInds)')/length(testInds);
 
-                features = addHistory(reducFRs(usedCtxInds,:),5,2,10);
-                ctxRFClassifier = fitcdiscr(features(:,trainInds)',behvLabels(trainInds));
-                ctxRFPredLabelsShift{iBlock,iShift-1} = str2double(string(predict(ctxRFClassifier,features(:,testInds)')));
+                ctxRFPredLabelsShift{iBlock,iShift-1} = str2double(string(predict(ctxRFClassifier,ctxFeatures(:,testInds)')));
                 ctxRFBlockAccuracyShift(iSess,iBlock,iShift-1) = sum(ctxRFPredLabelsShift{iBlock,iShift-1} == behvLabels(testInds)')/length(testInds);
 
                 testLabelsShift{iBlock,iShift-1} = behvLabels(testInds);
