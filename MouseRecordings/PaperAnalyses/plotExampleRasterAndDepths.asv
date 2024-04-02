@@ -1,0 +1,82 @@
+clear
+close all
+
+% all session locations
+sessionDirs = {'Z:\David\ArenaRecordings\NeuropixelsTest\D020-062922-ArenaRecording',...
+    'Z:\David\ArenaRecordings\NeuropixelsTest\D024-111022-ArenaRecording',...
+    'X:\David\ArenaRecordings\D026-032923-ArenaRecording'};
+
+allBehvAlignPerms = [
+    1 2 3 4 5 6 7; ...
+    7 6 3 5 4 2 1; ...
+    1 2 4 5 3 6 7 ...
+    ];
+
+striatalDepthCutoffs = [2600 2400 2400];
+
+plotColors = lines(7);
+maxPlotTime = 150; %in seconds
+
+for iSess = 1:length(sessionDirs)
+
+    % load in data
+    load(fullfile(sessionDirs{iSess},'ProcessedData','NeuralFiringRates10msBins30msGauss.mat'),'cortexInds','striatumInds');
+    load(fullfile(sessionDirs{iSess},'ProcessedData','neuronDataStruct.mat'));
+
+    % get depth and timestamps for each neuron
+    depths = [neuronDataStruct([striatumInds cortexInds]).depth];
+    spikeTimes = {neuronDataStruct([striatumInds cortexInds]).timeStamps};
+    spikeTimes = cellfun(@(x) double(x(x<30000*maxPlotTime))/30000,spikeTimes,'UniformOutput',false);
+
+    % get artifact times and remove spikes in those periods
+    load(fullfile(sessionDirs{iSess},'Neuropixels','artifactTimestamps.mat'));
+    artifactBoutStarts = [artifactTS(1) artifactTS(find(diff(artifactTS)>1)+1)]/30000;
+    artifactBoutEnds = [artifactTS(find(diff(artifactTS)>1)) artifactTS(end)]/30000;
+    for iBout = 1:length(artifactBoutEnds)
+        for iNeuron = 1:length(spikeTimes)
+            spikeTimes{iNeuron}(spikeTimes{iNeuron} > artifactBoutStarts(iBout) & spikeTimes{iNeuron} < artifactBoutEnds(iBout)) = [];
+        end
+    end
+
+    % plot raster
+    figure;
+    tiledlayout(1,4,'TileSpacing','tight')
+    axH(1) = nexttile(1,[1 3]);
+    rasterplot(spikeTimes,'times','.',[],[],depths+randn(1,length(depths))*2)
+
+    % add regions indicating artifact times
+    for iBout = 1:length(artifactBoutEnds)
+
+    end
+
+    set(axH(1),'Box','off')
+    set(axH(1),'fontsize',14)
+    set(axH(1),'tickdir','out')
+    set(axH(1),'linewidth',1.5)
+    set(axH(1),'XColor','k')
+    set(axH(1),'YColor','k')
+    set(axH(1),'ytick',0:1000:4000)
+    set(axH(1),'yticklabel',4000:-1000:0)
+    ylabel('Depth (mm)')
+    xlabel('Time (s)')
+
+    % plot depth histogram
+    axH(2) = nexttile(4);
+    histH = histogram(depths,0:100:4000,'Orientation','horizontal');
+    hold on
+    line(get(axH(2),'XLim'),repmat(striatalDepthCutoffs(iSess),1,2),'linewidth',2,'linestyle','--','color','k')
+    histH.EdgeColor = 'none';
+    set(axH(2),'Box','off')
+    set(axH(2),'ytick',[])
+    set(axH(2),'fontsize',14)
+    set(axH(2),'tickdir','out')
+    set(axH(2),'linewidth',1.5)
+    set(axH(2),'XColor','k')
+    set(axH(2),'YColor','k')
+    xlabel('# of Neurons');
+    linkaxes(axH,'y')
+
+    set(gca,'YLim',[0 4000])
+    set(gcf,'color','w')
+
+end
