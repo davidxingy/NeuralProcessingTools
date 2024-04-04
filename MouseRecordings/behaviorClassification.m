@@ -67,7 +67,7 @@ for iSess = 1:length(sessionDirs)
     behvLabels = regionAssignmentsFilteredBinned(reducIndsToUse);
 
     % do control by shifting behavior labels
-    nShifts = 200;
+    nShifts = 0;
 
     for iShift = 1:nShifts+1
         
@@ -99,20 +99,6 @@ for iSess = 1:length(sessionDirs)
 
             testInds = cvBlocks{iBlock};
             trainInds = [cvBlocks{setdiff(1:length(cvBlocks),iBlock)}];
-
-            %         %do random forrest classification
-            %         tic
-            %         ctxRFClassifier = TreeBagger(10,reducFRs(length(striatumInds)+1:end,trainInds)',behvLabels(trainInds),...
-            %             Method="classification",...
-            %             OOBPrediction="on");
-            %         trainTime(iSess,iBlock) = toc;
-            %
-            %         strRFPredLabels{iBlock} = str2double(string(predict(strRFClassifier,reducFRs(1:length(striatumInds),testInds)')));
-            %         ctxRFPredLabels{iBlock} = str2double(string(predict(ctxRFClassifier,reducFRs(length(striatumInds)+1:end,testInds)')));
-            %
-            %         strRFBlockAccuracy(iSess,iBlock) = sum(strRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
-            %         ctxRFBlockAccuracy(iSess,iBlock) = sum(ctxRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
-
 
             % do PCA as feature extraction step if needed
             nHistory = 2;
@@ -150,45 +136,26 @@ for iSess = 1:length(sessionDirs)
             % test
             if iShift ==1
 
-                strRFPredLabels{iBlock} = str2double(string(predict(strRFClassifier,strFeatures(:,testInds)')));
-                strRFBlockAccuracy(iSess,iBlock) = sum(strRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
+                strRFPredLabels{iSess,iBlock} = str2double(string(predict(strRFClassifier,strFeatures(:,testInds)')));
+                strRFBlockAccuracy(iSess,iBlock) = sum(strRFPredLabels{iSess,iBlock} == behvLabels(testInds)')/length(testInds);
 
-                ctxRFPredLabels{iBlock} = str2double(string(predict(ctxRFClassifier,ctxFeatures(:,testInds)')));
-                ctxRFBlockAccuracy(iSess,iBlock) = sum(ctxRFPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
+                ctxRFPredLabels{iSess,iBlock} = str2double(string(predict(ctxRFClassifier,ctxFeatures(:,testInds)')));
+                ctxRFBlockAccuracy(iSess,iBlock) = sum(ctxRFPredLabels{iSess,iBlock} == behvLabels(testInds)')/length(testInds);
 
-                testLabels{iBlock} = behvLabels(testInds);
+                testLabels{iSess,iBlock} = behvLabels(testInds);
 
             else
 
-                strRFPredLabelsShift{iBlock,iShift-1} = str2double(string(predict(strRFClassifier,strFeatures(:,testInds)')));
-                strRFBlockAccuracyShift(iSess,iBlock,iShift-1) = sum(strRFPredLabelsShift{iBlock,iShift-1} == behvLabels(testInds)')/length(testInds);
+                strRFPredLabelsShift{iSess,iBlock,iShift-1} = str2double(string(predict(strRFClassifier,strFeatures(:,testInds)')));
+                strRFBlockAccuracyShift(iSess,iBlock,iShift-1) = sum(strRFPredLabelsShift{iSess,iBlock,iShift-1} == behvLabels(testInds)')/length(testInds);
 
-                ctxRFPredLabelsShift{iBlock,iShift-1} = str2double(string(predict(ctxRFClassifier,ctxFeatures(:,testInds)')));
-                ctxRFBlockAccuracyShift(iSess,iBlock,iShift-1) = sum(ctxRFPredLabelsShift{iBlock,iShift-1} == behvLabels(testInds)')/length(testInds);
+                ctxRFPredLabelsShift{iSess,iBlock,iShift-1} = str2double(string(predict(ctxRFClassifier,ctxFeatures(:,testInds)')));
+                ctxRFBlockAccuracyShift(iSess,iBlock,iShift-1) = sum(ctxRFPredLabelsShift{iSess,iBlock,iShift-1} == behvLabels(testInds)')/length(testInds);
 
-                testLabelsShift{iBlock,iShift-1} = behvLabels(testInds);
+                testLabelsShift{iSess,iBlock,iShift-1} = behvLabels(testInds);
 
             end
 
-            %         %Also use SVM
-            %         %don't use low FR neurons
-            %         goodNeuronsStr = find(mean(reducFRs(1:length(striatumInds),:),2)*100>0.5);
-            %         goodNeuronsCtx = find(mean(reducFRs(length(striatumInds)+1:end,:),2)*100>0.5);
-            %
-            %         usedStrInds = 1:length(striatumInds);
-            %         usedStrInds = usedStrInds(goodNeuronsStr);
-            %         usedCtxInds = length(striatumInds)+1:size(reducFRs,1);
-            %         usedCtxInds = usedCtxInds(goodNeuronsCtx);
-            %
-            %         strNBClassifier = fitcecoc(reducFRs(usedStrInds,trainInds)',behvLabels(trainInds));
-            %         ctxNBClassifier = fitcecoc(reducFRs(usedCtxInds,trainInds)',behvLabels(trainInds));
-            %
-            %         strNBPredLabels{iBlock} = str2double(string(predict(strNBClassifier,reducFRs(usedStrInds,testInds)')));
-            %         ctxNBPredLabels{iBlock} = str2double(string(predict(ctxNBClassifier,reducFRs(usedCtxInds,testInds)')));
-            %
-            %         strNBBlockAccuracy(iBlock) = sum(strNBPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
-            %         ctxNBBlockAccuracy(iBlock) = sum(ctxNBPredLabels{iBlock} == behvLabels(testInds)')/length(testInds);
-            %
 
         end
 

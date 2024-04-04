@@ -375,7 +375,7 @@ for iShuff = 1:nShuff
             regionPrctSigsFiltShuff(iChan,iShedRegion,iShuff) = prctile(regionFiltValuesNonZeros,99);
         end
 
-        %Sparsity
+        %sparsity
         hasMinPointsBins = find(binNPointsDownsamp(accumarrayRealOutputsDownsamp) >= 100);
         probVisitBin = binNPointsDownsamp(accumarrayRealOutputsDownsamp(hasMinPointsBins))/...
             sum(binNPointsDownsamp(accumarrayRealOutputsDownsamp(hasMinPointsBins)));
