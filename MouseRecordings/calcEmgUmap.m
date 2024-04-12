@@ -86,37 +86,38 @@ load(fullfile(baseDir,'ProcessedData','EMG1ms.mat'))
 load(fullfile(baseDir,'ProcessedData',[recordingSessionName '_ProcessedEMG_MetaData.mat']))
 nDownsampPoints = size(downsampEMG,2);
 
-% load video and neuropixel sync
-load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
-
-% load in neuropixel artifact times
-load(fullfile(baseDir,'Neuropixels','artifactTimestamps.mat'))
-maxSamples = frameNeuropixelSamples{1}{end}(end);
-
-% get datapoints which has neural lick artifacts and also don't use datapoints
-% where the neural data was removed (e.g. D024 where packets were dropped)
-neuroRemovedInds = getRejectedDataInds(frameNeuropixelSamples);
-badEMGInds = NeurEMGSync([lickArtifactTS neuroRemovedInds], frameEMGSamples, frameNeuropixelSamples, 'Neuropixel');
-% get it in downsampled 1ms bins
-artifactEMGInds = find(histcounts(badEMGInds,1:20:maxSamples));
-% artifactEMGInds = find(histcounts(...
-%     (lickArtifactTS-frameNeuropixelSamples{1}{1}(1))/30*20+frameEMGSamples{1}{1}(1),1:20:maxSamples));
-artifactEMGInds(artifactEMGInds > size(downsampEMG,2)) = [];
-% also don't use bins which have EMG artifacts
-artifactEMGInds = unique([artifactEMGInds find(histcounts(removedInds,1:20:size(downsampEMG,2)*20))]);
+% % % % load video and neuropixel sync
+% load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
+% % % 
+% % % % load in neuropixel artifact times
+% % % load(fullfile(baseDir,'Neuropixels','artifactTimestamps.mat'))
+% % % maxSamples = frameNeuropixelSamples{1}{end}(end);
+% % % 
+% % % % get datapoints which has neural lick artifacts and also don't use datapoints
+% % % % where the neural data was removed (e.g. D024 where packets were dropped)
+% % % neuroRemovedInds = getRejectedDataInds(frameNeuropixelSamples);
+% % % badEMGInds = NeurEMGSync([lickArtifactTS neuroRemovedInds], frameEMGSamples, frameNeuropixelSamples, 'Neuropixel');
+% % % % get it in downsampled 1ms bins
+% % % artifactEMGInds = find(histcounts(badEMGInds,1:20:maxSamples));
+% % % % artifactEMGInds = find(histcounts(...
+% % % %     (lickArtifactTS-frameNeuropixelSamples{1}{1}(1))/30*20+frameEMGSamples{1}{1}(1),1:20:maxSamples));
+% % % artifactEMGInds(artifactEMGInds > size(downsampEMG,2)) = [];
+% % % % also don't use bins which have EMG artifacts
+% % % artifactEMGInds = unique([artifactEMGInds find(histcounts(removedInds,1:20:size(downsampEMG,2)*20))]);
+artifactEMGInds = find(histcounts(removedInds,1:20:size(downsampEMG,2)*20));
 
 % load in behavaior labels
 load(fullfile(baseDir,'ProcessedData','BehaviorAnnotations','BehaviorLabels.mat'))
-analyzedBehaviors = behaviors(1:end-1); %{'grooming','eating','walkgrid','walkflat','rearing','climbup','climbdown','still','jumping','jumpdown'};
+analyzedBehaviors = behaviors([1:10]); %{'grooming','eating','walkgrid','walkflat','rearing','climbup','climbdown','still','jumping','jumpdown'};
 
 % load in manually annotated data to use as the supervised UMAP projection
-load('EpochedData1ms.mat')
+% load('EpochedData1ms.mat')
 
 allData = downsampEMG;
 badChans = badEMGChans;
 allData(badChans,:) = [];
 dataChannels = 1:size(allData,1);
-frameSyncs = frameEMGSamples;
+% frameSyncs = frameEMGSamples;
 artifactBins = artifactEMGInds;
 
 % Berman frequency decomposition method
@@ -130,9 +131,16 @@ waveletParams.minF = 0.5;
 % continuous-nonartifact segment to avoid transitions contaminating the
 % wavelet decompositon)
 
-removedIndsDownSamp = artifactBins;
+% load in artifacts from NP
+load(fullfile(baseDir,'Neuropixels','artifactTimestamps.mat'),'lickArtifactTS')
+load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
+lickEMGInds = round(NeurEMGSync(lickArtifactTS,frameEMGSamples,frameNeuropixelSamples,'Neuropixel')/20);
+lickEMGInds(isnan(lickEMGInds)) = [];
+
+removedIndsDownSamp = unique([artifactBins lickEMGInds]);
+
 if removedIndsDownSamp(1) == 1 || removedIndsDownSamp(end) == size(allData,2)
-    error('Beginning or last sample is artifact, need to add code to handle this case')
+%     error('Beginning or last sample is artifact, need to add code to handle this case')
 end
 artifactTransitions = [find(diff(removedIndsDownSamp)~=1)];
 artifactSegStarts = [removedIndsDownSamp(1) removedIndsDownSamp(artifactTransitions+1)];
@@ -146,7 +154,7 @@ for iSeg = 1:length(artifactSegStarts)+1
 
     if iSeg == 1
         segData = allData(:,1:artifactSegStarts(1)-1);
-        if size(segData,2) < minSegLength   
+        if size(segData,2) < minSegLength || removedIndsDownSamp(1) == 1
             freqDataSeg{iSeg} = [];
             badSegIndsCell{iSeg} = 1:artifactSegStarts(1)-1;
         else
@@ -155,7 +163,7 @@ for iSeg = 1:length(artifactSegStarts)+1
 
     elseif iSeg == length(artifactSegStarts)+1
         segData = allData(:,artifactSegEnds(iSeg-1)+1:end);
-        if size(segData,2) < minSegLength
+        if size(segData,2) < minSegLength || removedIndsDownSamp(end) == size(allData,2)
             freqDataSeg{iSeg} = [];
             badSegIndsCell{iSeg} = artifactSegEnds(iSeg-1)+1:size(allData,2);
         else
@@ -201,11 +209,11 @@ clear downsampEMG
 % end
 
 % map behavior labels onto the time points
-[~, ~, boutEMGInds] = splitIntoAnnotatedBehaviors(baseDir,'NeuralFiringRates1msBins10msGauss.mat', analyzedBehaviors, [], 1, 10);
+[~, ~, boutEMGInds] = splitIntoAnnotatedBehaviors(baseDir,[], analyzedBehaviors, [], 1, 10);
 
 % assign behavioral labels to each of the points
 behvLabels = zeros(1,nDownsampPoints); %use downsampEMG which was before the artifact inds were removed
-for iBehv = 1:length(behaviors)-1
+for iBehv = 1:length(analyzedBehaviors)
     
     allBehvInds = cat(2,boutEMGInds{iBehv,:});
     behvLabels(allBehvInds) = iBehv;
@@ -237,7 +245,7 @@ distKL = @(x,y) log(y./sum(y,2))*(x/sum(x))'*-1+repmat((x/sum(x))*log((x/sum(x))
 % Do UMAP
 if useManualAnnotations
     % run initial UMAP projection using only manually annotated points
-    inputFeatures = freqData(intersect(indsToUse,annotatedBehvLabels),:);
+    inputFeatures = freqData(intersect(indsToUse,[annotatedBehvLabels]),:);
     [reduction,umap,clusterIdentifiers,extras] = run_umap(inputFeatures(1:projDownSamp:end,:),...
         'n_components',nUMAPDims,'n_neighbors',nUMapNeighbors,'save_template_file', 'projUMAPTemplate.mat','Distance',distKL);
 else
@@ -247,17 +255,17 @@ else
         'n_components',nUMAPDims,'n_neighbors',nUMapNeighbors,'save_template_file', 'projUMAPTemplate.mat','Distance',distKL);
 end
 
+save('UMAP_MixedTemplate','reduction','umap','clusterIdentifiers','extras','freqData','analyzedBehaviors','behvLabels','behvLabelsNoArt','origDownsampEMGInd','indsToUse','-v7.3')
 % divide into chunks to do the mapping since it's way too many data points
 % to do the projection all at once
-nChunks = 10;
+nChunks = 50;
 reduction = [];
 umapProps = {};
 clusterIdentifiers = [];
 umapExtras = {};
 
 for iChunk = 1:nChunks
-    inputFeatures = freqData(indsToUse,:);
-    [reduction_chunk,umap_chunk,clusterIdentifiers_chunk,extras_chunk] = run_umap(inputFeatures(iChunk:nChunks:end,:),'template_file','projUMAPTemplate.mat');
+    [reduction_chunk,umap_chunk,clusterIdentifiers_chunk,extras_chunk] = run_umap(freqData(iChunk:nChunks:end,:),'template_file','projUMAPTemplate.mat');
     reduction(iChunk:nChunks:size(freqData,1),:) = reduction_chunk;
     clusterIdentifiers(iChunk:nChunks:size(freqData,1)) = clusterIdentifiers_chunk;
     umapProps{iChunk} = umap_chunk;
@@ -265,7 +273,7 @@ for iChunk = 1:nChunks
 end
 
 % save projection
-save('UMAP','reduction','umapProps','clusterIdentifiers','umapExtras','freqData','analyzedBehaviors','behvLabels','behvLabelsNoArt','origDownsampEMGInd','-v7.3')
+save('UMAP_Mixed','reduction','umapProps','clusterIdentifiers','umapExtras','freqData','analyzedBehaviors','behvLabels','behvLabelsNoArt','origDownsampEMGInd','-v7.3')
 
 
 % 
