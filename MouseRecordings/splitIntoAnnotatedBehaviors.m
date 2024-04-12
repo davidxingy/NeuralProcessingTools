@@ -1,11 +1,20 @@
 function [behavioralData, allNeurInds, allEMGInds, unusedBouts] = splitIntoAnnotatedBehaviors(baseRecordingFolder, neuralDataFile, analyzedBehaviors, badEMGChans, binSize, gaussStd)
 
+if isempty(neuralDataFile)
+    onlyEMG = true;
+    allNeurInds = [];
+else
+    onlyEMG = false;
+end
+
 load(fullfile(baseRecordingFolder,'ProcessedData','VideoSyncFrames.mat'))
-load(fullfile(baseRecordingFolder,'ProcessedData','neuronDataStruct.mat'))
-load(fullfile(baseRecordingFolder,'ProcessedData',neuralDataFile),'noNanFRs')
-load(fullfile(baseRecordingFolder,'Neuropixels','artifactTimestamps.mat'))
 load(fullfile(baseRecordingFolder,'ProcessedData','BehaviorAnnotations','BehaviorLabels.mat'))
 
+if ~onlyEMG
+    load(fullfile(baseRecordingFolder,'ProcessedData','neuronDataStruct.mat'))
+    load(fullfile(baseRecordingFolder,'ProcessedData',neuralDataFile),'noNanFRs')
+    load(fullfile(baseRecordingFolder,'Neuropixels','artifactTimestamps.mat'))
+end
 
 % load and concatenate all EMG data
 allEMG = [];
@@ -37,20 +46,24 @@ load(fullfile(baseRecordingFolder,'ProcessedData',[baseName '_ProcessedEMG_MetaD
 
 
 % downsample and align to neural data
-neuralEMGOffset = round(frameNeuropixelSamples{1}{1}(1)/(30*binSize) - frameEMGSamples{1}{1}(1)/(20*binSize));
 downsampEMG = downsample(allEMG',(20*binSize))';
 
-maxSamples = frameNeuropixelSamples{1}{end}(end);
-
-artifacts = histcounts(artifactTS,1:(30*binSize):maxSamples);
-artifactNeurBins = find(convGauss(artifacts, 1, gaussStd));
-
-% get datapoints which has neural artifacts
-artifactEMGInds = find(histcounts(...
-    (artifactTS-frameNeuropixelSamples{1}{1}(1))/3*2+frameEMGSamples{1}{1}(1),1:(20*binSize):maxSamples));
+if ~onlyEMG
+    neuralEMGOffset = round(frameNeuropixelSamples{1}{1}(1)/(30*binSize) - frameEMGSamples{1}{1}(1)/(20*binSize));
+    maxSamples = frameNeuropixelSamples{1}{end}(end);
+    artifacts = histcounts(artifactTS,1:(30*binSize):maxSamples);
+    artifactNeurBins = find(convGauss(artifacts, 1, gaussStd));
+    % get datapoints which has neural artifacts
+    artifactEMGInds = find(histcounts(...
+        (artifactTS-frameNeuropixelSamples{1}{1}(1))/3*2+frameEMGSamples{1}{1}(1),1:(20*binSize):maxSamples));
+end
 
 % get datapoints which has emg artifacts
-artifactEMGInds = unique([artifactEMGInds find(histcounts(removedInds,1:(20*binSize):size(allEMG,2)))]);
+if onlyEMG
+    artifactEMGInds = find(histcounts(removedInds,1:(20*binSize):size(allEMG,2)));
+else
+    artifactEMGInds = unique([artifactEMGInds find(histcounts(removedInds,1:(20*binSize):size(allEMG,2)))]);
+end
 
 clear allEMG
 downsampEMG(badEMGChans,:) = [];
@@ -80,43 +93,56 @@ for iBehv = 1:length(analyzedBehaviors)
         boutEnds = [boutTransitions length(frameInds)];
         
         for iBout = 1:length(boutStarts)
-            boutNeuralStart = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutStarts(iBout)))/(30*binSize));
-            boutNeuralEnd = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutEnds(iBout)))/(30*binSize));
-            boutNeuralInds = boutNeuralStart:boutNeuralEnd;
-            [~, badNeurInds] = intersect(boutNeuralInds,artifactNeurBins);
-%             boutNeuralInds(badBoutInds)=[];
-        
-            %check to make sure the data is valid (there are some datasets
-            %where there was dropped data packets from spikeGLX)
-            if isnan(boutNeuralStart) || isnan(boutNeuralEnd)
-                unusedBouts{iBehv}(iAllSection) = 1;
-                iAllSection = iAllSection + 1;
-                continue
-            else
-                unusedBouts{iBehv}(iAllSection) = 0;
-                iAllSection = iAllSection + 1;
+            
+            if ~onlyEMG
+                
+                boutNeuralStart = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutStarts(iBout)))/(30*binSize));
+                boutNeuralEnd = round(frameNeuropixelSamples{1}{iVid}(frameInds(boutEnds(iBout)))/(30*binSize));
+                boutNeuralInds = boutNeuralStart:boutNeuralEnd;
+                [~, badNeurInds] = intersect(boutNeuralInds,artifactNeurBins);
+                %             boutNeuralInds(badBoutInds)=[];
+                
+                %check to make sure the data is valid (there are some datasets
+                %where there was dropped data packets from spikeGLX)
+                if isnan(boutNeuralStart) || isnan(boutNeuralEnd)
+                    unusedBouts{iBehv}(iAllSection) = 1;
+                    iAllSection = iAllSection + 1;
+                    continue
+                else
+                    unusedBouts{iBehv}(iAllSection) = 0;
+                    iAllSection = iAllSection + 1;
+                end
+                
             end
             
             boutEMGStart = round(frameEMGSamples{1}{iVid}(frameInds(boutStarts(iBout)))/(20*binSize));
             boutEMGEnd = round(frameEMGSamples{1}{iVid}(frameInds(boutEnds(iBout)))/(20*binSize));
             
-            boutSegDiff = boutEMGEnd-boutEMGStart - (boutNeuralEnd-boutNeuralStart);
-            if boutSegDiff == 0
-                boutEMGInds = boutEMGStart:boutEMGEnd;
-            elseif abs(boutSegDiff) <= 1
-                boutEMGInds = boutEMGStart:boutEMGStart+boutNeuralEnd-boutNeuralStart;
+            if ~onlyEMG
+                
+                boutSegDiff = boutEMGEnd-boutEMGStart - (boutNeuralEnd-boutNeuralStart);
+                if boutSegDiff == 0
+                    boutEMGInds = boutEMGStart:boutEMGEnd;
+                elseif abs(boutSegDiff) <= 1
+                    boutEMGInds = boutEMGStart:boutEMGStart+boutNeuralEnd-boutNeuralStart;
+                else
+                    error('Greater than 1 ind difference in neural and EMG bout segment lengths!')
+                end
+                
             else
-                error('Greater than 1 ind difference in neural and EMG bout segment lengths!')
+                boutEMGInds = boutEMGStart:boutEMGEnd;
             end
             
             [~, badEMGInds] = intersect(boutEMGInds,artifactEMGInds);
 %             boutEMGInds(badBoutInds)=[];
             
-            thisBoutFR = noNanFRs(:,boutNeuralInds);
-            thisBoutFR(:,badNeurInds) = nan;
-            boutFRs{iSection} = thisBoutFR;
-            allNeurInds{iBehv,iSection} = boutNeuralInds;
-
+            if ~onlyEMG
+                thisBoutFR = noNanFRs(:,boutNeuralInds);
+                thisBoutFR(:,badNeurInds) = nan;
+                boutFRs{iSection} = thisBoutFR;
+                allNeurInds{iBehv,iSection} = boutNeuralInds;
+            end
+            
             thisBoutEMG = downsampEMG(:,boutEMGInds);
             thisBoutEMG(:,badEMGInds) = nan;
             boutEMGs{iSection} = thisBoutEMG;
@@ -125,12 +151,13 @@ for iBehv = 1:length(analyzedBehaviors)
             iSection = iSection+1;
         end
         
-        allBoutFRs = [boutFRs{:}];
-        allBoutEMGs = [boutEMGs{:}];
+        if ~onlyEMG
+            allBoutFRs = [boutFRs{:}];
+            behavioralData.(behav).boutFRs = boutFRs;
+            behavioralData.(behav).allBoutFRs = allBoutFRs;
+        end
         
-        behavioralData.(behav).boutFRs = boutFRs;
-        behavioralData.(behav).allBoutFRs = allBoutFRs;
-
+        allBoutEMGs = [boutEMGs{:}];
         behavioralData.(behav).boutEMGs = boutEMGs;
         behavioralData.(behav).allBoutEMGs = allBoutEMGs;
         
