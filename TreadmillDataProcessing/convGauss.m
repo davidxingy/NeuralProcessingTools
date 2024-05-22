@@ -1,4 +1,4 @@
-function smoothedFRs = convGauss(binnedSpiketimes, binSize, convStd)
+function smoothedFRs = convGauss(binnedSpiketimes, binSize, convStd, causal)
 % smoothedFRs = convGauss(binnedSpiketimes, binSize, convStd)
 % 
 % function to smooth binned spike counts to a firing rate by convolving
@@ -24,6 +24,10 @@ function smoothedFRs = convGauss(binnedSpiketimes, binSize, convStd)
 % go from around -3 stds to 3 stds
 gaussX = round(-3*convStd):binSize:round(3*convStd);
 gaussY=normpdf(gaussX,0,convStd)*binSize;
+
+if causal
+    gaussY(1:floor(length(gaussY)/2)) = 0;
+end
 
 for iChan = 1:size(binnedSpiketimes,1)
     smoothedFRs(iChan,:)=conv(binnedSpiketimes(iChan,:), gaussY, 'same');
