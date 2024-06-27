@@ -109,6 +109,7 @@ artifactEMGInds = find(histcounts(removedInds,1:20:size(downsampEMG,2)*20));
 % load in behavaior labels
 load(fullfile(baseDir,'ProcessedData','BehaviorAnnotations','BehaviorLabels.mat'))
 analyzedBehaviors = behaviors([1:10]); %{'grooming','eating','walkgrid','walkflat','rearing','climbup','climbdown','still','jumping','jumpdown'};
+analyzedBehaviors = behaviors([1:6 8:11]);
 
 % load in manually annotated data to use as the supervised UMAP projection
 % load('EpochedData1ms.mat')
@@ -131,11 +132,12 @@ waveletParams.minF = 0.5;
 % continuous-nonartifact segment to avoid transitions contaminating the
 % wavelet decompositon)
 
-% load in artifacts from NP
-load(fullfile(baseDir,'Neuropixels','artifactTimestamps.mat'),'lickArtifactTS')
-load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
-lickEMGInds = round(NeurEMGSync(lickArtifactTS,frameEMGSamples,frameNeuropixelSamples,'Neuropixel')/20);
-lickEMGInds(isnan(lickEMGInds)) = [];
+% % load in artifacts from NP
+% load(fullfile(baseDir,'Neuropixels','artifactTimestamps.mat'),'lickArtifactTS')
+% load(fullfile(baseDir,'ProcessedData','VideoSyncFrames.mat'))
+% lickEMGInds = round(NeurEMGSync(lickArtifactTS,frameEMGSamples,frameNeuropixelSamples,'Neuropixel')/20);
+% lickEMGInds(isnan(lickEMGInds)) = [];
+lickEMGInds = [];
 
 removedIndsDownSamp = unique([artifactBins lickEMGInds]);
 
@@ -223,6 +225,9 @@ end
 % remove artifact inds from the behavioral labels
 behvLabelsNoArt = behvLabels;
 behvLabelsNoArt([removedIndsDownSamp badSegInds]) = [];
+
+load('badInds.mat')
+behvLabelsNoArt(badInds) = 0;
 
 annotatedBehvLabels = find(behvLabelsNoArt~=0);
 

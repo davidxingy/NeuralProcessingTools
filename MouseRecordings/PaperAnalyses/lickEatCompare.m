@@ -1,0 +1,273 @@
+clear
+close all
+
+sessionNames = {'Z:\David\ArenaRecordings\NeuropixelsTest\D020-062922-ArenaRecording',...
+    'Z:\David\ArenaRecordings\NeuropixelsTest\D024-111022-ArenaRecording',...
+    'X:\David\ArenaRecordings\D026-032923-ArenaRecording'};
+
+exampleEatNeurons = [18 5 39];
+plotColors = lines(7);
+
+rasterNeurFigH = figure;
+tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
+
+exampleSess = 1;
+
+for iSess = 1:length(sessionNames)
+   
+    load(fullfile(sessionNames{iSess},'ProcessedData','EpochedData10ms.mat'));
+    load(fullfile(sessionNames{iSess},'ProcessedData','UMAP.mat'),'analyzedBehaviors','regionAssignmentsFiltered','reduction','origDownsampEMGInd')
+    load(fullfile(sessionNames{iSess},'ProcessedData','UMAPFRs','NeuronRegionProps.mat'));
+    load(fullfile(sessionNames{iSess},'ProcessedData','NeuralFiringRates10msBins30msGauss.mat'), 'cortexInds', 'striatumInds', 'allFRs')
+    load(fullfile(sessionNames{iSess},'ProcessedData','VideoSyncFrames'))
+    load(fullfile(sessionNames{iSess},'ProcessedData','neuronDataStruct'))
+    load(fullfile(sessionNames{iSess},'ProcessedData','BehaviorAnnotations','BehaviorLabels.mat'));
+
+
+    shuffMean = mean(regionAveSigsShuff(1:length(striatumInds),:,:),3);
+    shuffStd = std(regionAveSigsShuff(1:length(striatumInds),:,:),[],3);
+    modulation = regionAveSigs(1:length(striatumInds),:) >= shuffMean + 3*shuffStd;
+    eatingModulatedNeurons = find(modulation(:,7));
+    eatingSpecificNeurons = find(modulation(:,7) & ~any(modulation(:,setdiff(1:7,7)),2));
+
+    % get single bouts of eating as examples
+    eatInds = find(regionAssignmentsFiltered==max(regionAssignmentsFiltered));
+    
+    eatBoutStarts = [eatInds(1) eatInds(find(diff(eatInds)>1)+1)];
+    eatBoutEnds = [eatInds(diff(eatInds)>1) eatInds(end)];
+    goodBouts = (eatBoutEnds-eatBoutStarts) > 5000;
+    eatBoutStarts = eatBoutStarts(goodBouts);
+    eatBoutEnds = eatBoutEnds(goodBouts);
+
+    currentDir = pwd;
+    cd(fullfile(sessionNames{iSess},'ProcessedData'))
+    boutNeurIndsStarts = round(NeurEMGSync(origDownsampEMGInd(eatBoutStarts)*20,...
+        frameEMGSamples, frameNeuropixelSamples, 'EMG')/30);
+    boutNeurIndsEnds = round(NeurEMGSync(origDownsampEMGInd(eatBoutEnds)*20,...
+        frameEMGSamples, frameNeuropixelSamples, 'EMG')/30);
+    cd(currentDir)
+
+    goodBouts = ~isnan(boutNeurIndsStarts) & ~isnan(boutNeurIndsEnds);
+    boutNeurIndsStarts = boutNeurIndsStarts(goodBouts);
+    boutNeurIndsEnds = boutNeurIndsEnds(goodBouts);
+
+    behaviorLabels = zeros(1,round(frameNeuropixelSamples{1}{end}(end)/30));
+    for iBout = 1:length(boutNeurIndsStarts)
+        behaviorLabels(boutNeurIndsStarts(iBout):boutNeurIndsEnds(iBout)) = 1;
+    end
+
+    % next get lick and climbing lick bouts
+    for iVid = 1:length(behaviorFrames{1})
+        lickIndsCell{iVid} = round(frameNeuropixelSamples{1}{iVid}(behaviorFrames{11}{iVid})/30);
+        climblickIndsCell{iVid} = round(frameNeuropixelSamples{1}{iVid}(behaviorFrames{12}{iVid})/30);
+    end
+
+    lickInds = cat(2,lickIndsCell{:});
+    climblickInds = cat(2,climblickIndsCell{:});
+
+    lickBoutStarts = [lickInds(1) lickInds(find(diff(lickInds)>27)+1)];
+    lickBoutEnds = [lickInds(diff(lickInds)>27) lickInds(end)];
+    for iBout = 1:length(lickBoutStarts)
+        behaviorLabels(lickBoutStarts(iBout):lickBoutEnds(iBout)) = 2;
+    end
+
+    climblickBoutStarts = [climblickInds(1) climblickInds(find(diff(climblickInds)>27)+1)];
+    climblickBoutEnds = [climblickInds(diff(climblickInds)>27) climblickInds(end)];
+    for iBout = 1:length(climblickBoutStarts)
+        behaviorLabels(climblickBoutStarts(iBout):climblickBoutEnds(iBout)) = 3;
+    end
+
+    %make raster plots
+    if iSess == exampleSess
+        figure(rasterNeurFigH)
+        axH(1) = nexttile(1);
+
+        spikeTimes = {neuronDataStruct.timeStamps};
+        depths = [neuronDataStruct.depth] + randn(1,length(spikeTimes))*30;
+
+        load(fullfile(sessionNames{iSess},'Neuropixels','artifactTimestamps.mat'));
+        artifactBoutStarts = [artifactTS(1) artifactTS(find(diff(artifactTS)>1)+1)];
+        artifactBoutEnds = [artifactTS(find(diff(artifactTS)>1)) artifactTS(end)];
+        for iBout = 1:length(artifactBoutEnds)
+            for iNeuron = 1:length(spikeTimes)
+                spikeTimes{iNeuron}(spikeTimes{iNeuron} > artifactBoutStarts(iBout) & spikeTimes{iNeuron} < artifactBoutEnds(iBout)) = [];
+            end
+%             behaviorLabels(round(artifactBoutStarts(iBout)/30):round(artifactBoutEnds(iBout)/30)) = 4;
+        end
+
+        spikeTimesTrunc = cellfun(@(x) x(x<30000*700),spikeTimes,'UniformOutput',false);
+        rasterplot(cellfun(@(x) double(x)/30000,spikeTimesTrunc,'un',0),'times','.',[],[],depths)
+        hold on
+        rasterplot(cellfun(@(x) double(x)/30000,spikeTimesTrunc(eatingSpecificNeurons),'un',0),'times','.',[],[],depths(eatingSpecificNeurons),{'MarkerEdgeColor',plotColors(3,:)})
+
+        for iBout = 1:length(artifactBoutEnds)
+            patch([repmat(artifactBoutStarts(iBout)/30000,1,2) repmat(artifactBoutEnds(iBout)/30000,1,2)],[0 2600 2600 0],'r','edgecolor','none','facealpha',0.08);
+        end
+
+        ylim([0 2600])
+
+        line([50; 150],[50; 50],'color','k','linewidth',3)
+        line([50; 50],[0; 500],'color','k','linewidth',3)
+
+        axH(2) = nexttile(2);
+        imagesc((1:length(behaviorLabels))/1000,1,behaviorLabels)
+        colormap([[0 0 0];parula(3)])
+
+        linkaxes(axH,'x')
+        set(gcf,'color','w')
+
+        xlim([0 625])
+
+        %make raster plot of individual bouts
+        figure('color','w')
+        tiledlayout(2,2)
+
+        exampleEatBout = 3;
+        exampleLickBout = 1;
+        extTimeEat = 30000;
+        extTimeLick = 15000;
+        spikeTimesEatBout = cellfun(@(x) x(x >= (boutNeurIndsStarts(exampleEatBout)-extTimeEat)*30 & x <= (boutNeurIndsEnds(exampleEatBout)+extTimeEat)*30),spikeTimes,'UniformOutput',false);
+        spiketimesLickBout = cellfun(@(x) x(x >= (lickBoutStarts(exampleLickBout)-extTimeLick)*30 & x <= (lickBoutEnds(exampleLickBout)+extTimeLick)*30),spikeTimes,'UniformOutput',false);
+        
+        axH(1) = nexttile(1);
+        rasterplot(cellfun(@(x) double(x)/30000,spikeTimesEatBout,'un',0),'times','.',[],[],depths)
+        hold on
+        rasterplot(cellfun(@(x) double(x)/30000,spikeTimesEatBout(eatingSpecificNeurons),'un',0),'times','.',[],[],depths(eatingSpecificNeurons),{'MarkerEdgeColor',plotColors(3,:)})
+
+        for iBout = 1:length(artifactBoutEnds)
+            patch([repmat(artifactBoutStarts(iBout)/30000,1,2) repmat(artifactBoutEnds(iBout)/30000,1,2)],[0 2600 2600 0],'r','edgecolor','none','facealpha',0.08);
+        end
+
+        line([560 580],[50 50],'linewidth',2)
+        line([560 560],[0 500],'linewidth',2)
+
+        ylim([0 2600])
+        axis off
+
+        axH(2) = nexttile(3);
+        plotLabel = zeros(1,(boutNeurIndsEnds(exampleEatBout)+extTimeEat)*30);
+        plotLabel(boutNeurIndsStarts(exampleEatBout)*30:boutNeurIndsEnds(exampleEatBout)*30) = 1;
+        plot((1:length(plotLabel))/30000,plotLabel,'r','LineWidth',2);
+
+        linkaxes(axH,'x')
+        xlim([(boutNeurIndsStarts(exampleEatBout)-extTimeEat)/1000 (boutNeurIndsEnds(exampleEatBout)+extTimeEat)/1000])
+        axis off
+
+        axH(1) = nexttile(2);
+        rasterplot(cellfun(@(x) double(x)/30000,spiketimesLickBout,'un',0),'times','.',[],[],depths)
+        hold on
+        rasterplot(cellfun(@(x) double(x)/30000,spiketimesLickBout(eatingSpecificNeurons),'un',0),'times','.',[],[],depths(eatingSpecificNeurons),{'MarkerEdgeColor',plotColors(3,:)})
+
+        for iBout = 1:length(artifactBoutEnds)
+            patch([repmat(artifactBoutStarts(iBout)/30000,1,2) repmat(artifactBoutEnds(iBout)/30000,1,2)],[0 2600 2600 0],'r','edgecolor','none','facealpha',0.08);
+        end
+
+        line([90 100],[50 50],'linewidth',2)
+        line([90 90],[0 500],'linewidth',2)
+
+        ylim([0 2600])
+        axis off
+
+        axH(2) = nexttile(4);
+        plotLabel = zeros(1,(lickBoutEnds(exampleLickBout)+extTimeLick)*30);
+        plotLabel(lickBoutStarts(exampleLickBout)*30:lickBoutEnds(exampleLickBout)*30) = 1;
+        plot((1:length(plotLabel))/30000,plotLabel,'r','LineWidth',2);
+
+        linkaxes(axH,'x')
+        xlim([(lickBoutStarts(exampleLickBout)-extTimeLick)/1000 (lickBoutEnds(exampleLickBout)+extTimeLick)/1000])
+        axis off
+
+    end
+
+
+    %compare licking with eating for these neurons
+    nSubsamples = 2000;
+    for iNeuron = 1:length(eatingSpecificNeurons)
+
+        nLickTimePoints = size(behavioralData.lick.allBoutFRs,2);
+        nLickClimbTimePoints = size(behavioralData.lickclimb.allBoutFRs,2);
+        nEatTimePoints = size(behavioralData.eating.allBoutFRs,2);
+        nClimbTimePoints = size(behavioralData.climbup.allBoutFRs,2);
+
+        for iSamp = 1:nSubsamples
+            subSampInds = randperm(nEatTimePoints,nLickTimePoints+nLickClimbTimePoints);
+            subsampMeansLickAll{iSess}(iNeuron,iSamp) = nanmean(behavioralData.eating.allBoutFRs(eatingSpecificNeurons(iNeuron),subSampInds));
+            subSampInds = randperm(nEatTimePoints,nLickTimePoints);
+            subsampMeansLick{iSess}(iNeuron,iSamp) = nanmean(behavioralData.eating.allBoutFRs(eatingSpecificNeurons(iNeuron),subSampInds));
+            subSampInds = randperm(nClimbTimePoints,nLickClimbTimePoints);
+            subsampMeansClimb{iSess}(iNeuron,iSamp) = nanmean(behavioralData.climbup.allBoutFRs(eatingSpecificNeurons(iNeuron),subSampInds));
+        end
+
+        lickMeans{iSess}(iNeuron) = nanmean(behavioralData.lick.allBoutFRs(eatingSpecificNeurons(iNeuron),:));
+        lickClimbMeans{iSess}(iNeuron) = nanmean(behavioralData.lickclimb.allBoutFRs(eatingSpecificNeurons(iNeuron),:));
+
+        pValueLickAll{iSess}(iNeuron) = (sum(subsampMeansLickAll{iSess}(iNeuron,:) <= mean([lickMeans{iSess}(iNeuron) lickClimbMeans{iSess}(iNeuron)]))+1) /...
+            (nSubsamples+1);
+        pValueLick{iSess}(iNeuron) = (sum(subsampMeansLick{iSess}(iNeuron,:) <= lickMeans{iSess}(iNeuron))+1) / (nSubsamples+1);
+
+        pValueClimb{iSess}(iNeuron) = (sum(subsampMeansClimb{iSess}(iNeuron,:) <= lickClimbMeans{iSess}(iNeuron))+1) / (nSubsamples+1);
+
+    end
+
+    %plot example histograms
+    if iSess == exampleSess
+
+        exampleNonLickNeuron = 34;
+        exampleLickNeuron = 12;
+        
+        figure('Color','w')
+        tiledlayout(1,2)
+        
+        nexttile
+        histH = histogram(subsampMeansLick{1}(exampleNonLickNeuron,:)*1000);
+        histH.EdgeColor = 'none';
+        hold on
+        line(repmat(lickMeans{iSess}(exampleNonLickNeuron),1,2)*1000,[0 200],'linestyle','--','linewidth',2,'color','k')
+        xlabel('Firing rate (spks/s)')
+        ylabel('Subsample Count')
+        box off
+        set(gca,'fontsize',14)
+        set(gca,'tickdir','out')
+        set(gca,'linewidth',1.5)
+        set(gca,'XColor','k')
+        set(gca,'YColor','k')
+        set(gcf,'color','w')
+        
+        nexttile
+        histH = histogram(subsampMeansLick{1}(exampleLickNeuron,:)*1000);
+        histH.EdgeColor = 'none';
+        hold on
+        line(repmat(lickMeans{iSess}(exampleLickNeuron),1,2)*1000,[0 200],'linestyle','--','linewidth',2,'color','k')
+        xlabel('Firing rate (spks/s)')
+        ylabel('Subsample Count')
+        box off
+        set(gca,'fontsize',14)
+        set(gca,'tickdir','out')
+        set(gca,'linewidth',1.5)
+        set(gca,'XColor','k')
+        set(gca,'YColor','k')
+        set(gcf,'color','w')
+
+    end
+
+end
+
+% do FDR multi-comparison correction
+allPsLick = [pValueLick{:}];
+allPsLickAll = [pValueLickAll{:}];
+sigDiffNeuronsLick = allPsLick < FDRcutoff(allPsLick,0.01,false);
+sigDiffNeuronsLickAll = allPsLickAll < FDRcutoff(allPsLickAll,0.01,false);
+
+% make summary plots
+nLickNeurons = cellfun(@(x) sum(x>=0.05)/length(x),pValueLick);
+
+barH = barScatterPlot({nLickNeurons},'none',1,{[-0.05 0 0.05]},[]);
+ylabel('Fraction Lick Neurons')
+set(gca,'XTick',[])
+
+
+
+% 
+
+
+

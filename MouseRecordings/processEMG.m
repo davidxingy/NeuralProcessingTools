@@ -3,7 +3,7 @@ function [processedEMG,filteredEMG,syncInds] = processEMG(emgDir, baseFilename, 
 allfiles = string(ls(emgDir));
 intanFiles = allfiles(cellfun(@(x) contains(x,'.rhd'),string(allfiles)));
 channelInds = [1:8];
-channelNames = {'Right Biceps','Right Triceps', 'Right ECR', 'Right PL', 'Right Quad', 'Right TA', 'Left Triceps','Left ECR'};
+channelNames = {'Right Biceps','Right Triceps', 'Right ECR', 'Right PL', 'Right Quad', 'Right TA', 'Left ECR','Left Triceps'};
 % channelNames = {'Biceps Ch1','Biceps Ch2','Biceps Ch3','Biceps Ch4',...
 %     'Triceps Ch1','Triceps Ch2','Triceps Ch3','Triceps Ch4',...
 %     'ECR Ch1','ECR Ch2','ECR Ch3','ECR Ch4',...
@@ -32,11 +32,13 @@ for iFile = 1:length(intanFiles)
     end
     [fileLaserOnset, fileLaserOffset] = detectSyncPulse(outputData.board_adc_data(2,:),2.5);
     [fileLaserControlOnset, fileLaserControlOffset] = detectSyncPulse(outputData.board_adc_data(3,:),2.5);
+    [fileEMGTrigDetection, ~] = detectSyncPulse(outputData.board_adc_data(4,:),2.5);
     if ~isempty(fileLaserOnset)
         laserOnsetInds{iFile} = fileLaserOnset + sum(fileNumSamples)-fileNumSamples(end);
         laserOffsetInds{iFile} = fileLaserOffset + sum(fileNumSamples)-fileNumSamples(end);
         controlOnsetInds{iFile} = fileLaserControlOnset + sum(fileNumSamples)-fileNumSamples(end);
         controlOffsetInds{iFile} = fileLaserControlOffset + sum(fileNumSamples)-fileNumSamples(end);
+        emgTrigInds{iFile} = fileEMGTrigDetection + sum(fileNumSamples)-fileNumSamples(end);
     end
     
     %get lick activations (so to remove voltage artifacts from the touch
@@ -56,11 +58,14 @@ for iFile = 1:length(intanFiles)
 
     %with data from sober probes, could be a lot of baseline drift, run
     %artifact detection on filtered data
-    [b,a] = butter(3,[100/10000],'high');
+    [b,a] = butter(3,[5000/10000],'high');
     lickTouchFiltSig = filtfilt(b,a,sigNoTouchArt');
-%     lickThreshes = [1200 1500 4000 1500 2200 4000 1900 4000 4000 200 300 1700 1500 4000 1300 4000]';
-    lickThreshes = [3000];
-    artInds = detectLickArtifacts(lickTouchFiltSig',lickThreshes,5,1);
+%     lickThreshes = [30 10000 10000 10000 10000 40 10000 10000]';
+%     lickThreshes = [10000 120 10000 10000 10000 120 10000 120]';
+    lickThreshes = [10000 30 40 10000 10000 50 10000 50]';
+    minThreshCrossChans = 3;
+%     lickThreshes = [3000];
+    artInds = detectLickArtifacts(lickTouchFiltSig',lickThreshes,minThreshCrossChans,1);
     
     %remove data from lick activations and replace with line
     if ~isempty(artInds)
@@ -131,6 +136,15 @@ for iFile = 1:length(intanFiles)
         save([baseFilename '_ProcessedEMG_Block2_Part' num2str(iSaveFile)], 'processedEMG', 'filteredEMG','-v7.3')
         iSaveFile = iSaveFile+1;
         
+        %edge case for if we reach the sample limit And we are at the last
+        %file, then have to save the leftovers of the last file
+        if totalSamples >= fileBreakSize && iFile == length(intanFiles)
+            processedEMG = [chanEnv{:}];
+            filteredEMG = [chanFilt{:}];
+            save([baseFilename '_ProcessedEMG_Block2_Part' num2str(iSaveFile)], 'processedEMG', 'filteredEMG','-v7.3')
+        end
+
+        %if last file, save meta data
         if iFile == length(intanFiles)
             removedInds = unique([removedInds{:}]);
             syncInds = [syncInds{:}];
@@ -138,8 +152,9 @@ for iFile = 1:length(intanFiles)
             laserOffsetInds = [laserOffsetInds{:}];
             controlOnsetInds = [controlOnsetInds{:}];
             controlOffsetInds = [controlOffsetInds{:}];
+            emgTrigInds = [emgTrigInds{:}];
             save([baseFilename '_MetaData'],'removedInds','syncInds','fileNumSamples','channelNames',...
-                'controlOnsetInds','controlOffsetInds','laserOnsetInds','laserOffsetInds','-v7.3');
+                'controlOnsetInds','controlOffsetInds','laserOnsetInds','laserOffsetInds','emgTrigInds','-v7.3');
         end
         
     else
@@ -221,6 +236,16 @@ end
 
 threshCrossings = abs(signals) > threshMat;
 
+% give it a buffer of 1 samples for simultaneous thresh crossings
+for iChan = 1:size(threshCrossings)
+    crossInds = find(threshCrossings(iChan,:));
+    if ~isempty(crossInds)
+        bufferInds = [crossInds-1 crossInds+1];
+        bufferInds(bufferInds == 0 | bufferInds > size(threshCrossings,2)) = [];
+        threshCrossings(iChan,bufferInds) = true;
+    end
+end
+
 multiThreshCrossings = double(sum(threshCrossings,1) >= minChans);
 
 [segStartInds, segLengths] = findConstants(multiThreshCrossings);
@@ -272,9 +297,8 @@ end
 
 function [filtsig, envelope] = processEMGSig(signal)
 
-% filter between 40 and 1000 hz
-[b,a] = butter(3,[40/10000 1000/10000]);
-
+% filter between 100 and 1000 hz
+[b,a] = butter(3,[100/10000 1000/10000]);
 filtsig = filtfilt(b,a,signal);
 
 % rectify and do 40ms moving average filter

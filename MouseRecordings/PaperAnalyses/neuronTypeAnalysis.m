@@ -1,0 +1,511 @@
+clear
+close all
+
+% all session locations
+sessionDirs = {'Z:\David\ArenaRecordings\NeuropixelsTest\D020-062922-ArenaRecording',...
+    'Z:\David\ArenaRecordings\NeuropixelsTest\D024-111022-ArenaRecording',...
+    'X:\David\ArenaRecordings\D026-032923-ArenaRecording'};
+
+allBehvAlignPerms = [
+    1 2 3 4 5 6 7; ...
+    1 2 3 4 5 6 7; ...
+    1 2 4 5 3 6 7 ...
+    ];
+
+plotColors = lines(7);
+
+behvRegionLabels = {'Climb Up','Climb Down','Misc/Jump','Walk','Misc/Rearing/Still','Groom','Eat'};
+
+for iSess = 1:length(sessionDirs)
+
+    % load in data
+    load(fullfile(sessionDirs{iSess},'ProcessedData','NeuralFiringRates10msBins30msGauss.mat'),'cortexInds','striatumInds','allFRs');
+    load(fullfile(sessionDirs{iSess},'ProcessedData','neuronDataStruct.mat'));
+
+    % get waveform for each neuron
+    for iNeuron = 1:length(neuronDataStruct)
+        neuronWaveform = neuronDataStruct(iNeuron).waveforms(:,neuronDataStruct(iNeuron).biggestChan);
+        [peakVal,peakInd] = max(neuronWaveform);
+        [troughVal,troughInd] = min(neuronWaveform);
+        peakToTrough{iSess}(iNeuron) = abs(peakInd-troughInd);
+
+        if peakVal > abs(troughVal)
+            halfAmp = peakVal/2;
+            halfInd1 = find(neuronWaveform>halfAmp,1);
+            halfInd2 = max(find(neuronWaveform>halfAmp));
+            halfWave{iSess}(iNeuron) = halfInd2-halfInd1;
+        else
+            halfAmp = troughVal/2;
+            halfInd1 = find(neuronWaveform<halfAmp,1);
+            halfInd2 = max(find(neuronWaveform<halfAmp));
+            halfWave{iSess}(iNeuron) = halfInd2-halfInd1;
+        end
+
+    end
+
+    peakToTroughStr{iSess} = peakToTrough{iSess}(striatumInds);
+    peakToTroughCtx{iSess} = peakToTrough{iSess}(cortexInds);
+
+    halfWaveStr{iSess} = halfWave{iSess}(striatumInds);
+    halfWaveCtx{iSess} = halfWave{iSess}(cortexInds);
+
+    % remove any outliers
+    peakToTroughStrOutliers = find(peakToTroughStr{iSess} > mean(peakToTroughStr{iSess})+3*std(peakToTroughStr{iSess}));
+    halfWaveStrOutliers = find(halfWaveStr{iSess} > mean(halfWaveStr{iSess})+3*std(halfWaveStr{iSess}));
+    strOutliers{iSess} = unique([peakToTroughStrOutliers halfWaveStrOutliers]);
+
+    peakToTroughStr{iSess}(strOutliers{iSess}) = [];
+    halfWaveStr{iSess}(unique([peakToTroughStrOutliers halfWaveStrOutliers])) = [];
+    processedDataStriatumInds{iSess} = 1:length(striatumInds);
+    processedDataStriatumInds{iSess}(strOutliers{iSess}) = [];
+
+    peakToTroughCtxOutliers = find(peakToTroughCtx{iSess} > mean(peakToTroughCtx{iSess})+3*std(peakToTroughCtx{iSess}));
+    halfWaveCtxOutliers = find(halfWaveCtx{iSess} > mean(halfWaveCtx{iSess})+3*std(halfWaveCtx{iSess}));
+    ctxOutliers{iSess} = unique([peakToTroughCtxOutliers halfWaveCtxOutliers]);
+
+    peakToTroughCtx{iSess}(ctxOutliers{iSess}) = [];
+    halfWaveCtx{iSess}(unique([peakToTroughCtxOutliers halfWaveCtxOutliers])) = [];
+    processedDataCortexInds{iSess} = length(striatumInds)+1:size(allFRs,1);
+    processedDataCortexInds{iSess}(ctxOutliers{iSess}) = [];
+
+end
+
+allPeakToTroughStr = cat(2,peakToTroughStr{:});
+allHalfWaveStr = cat(2,halfWaveStr{:});
+
+allPeakToTroughCtx = cat(2,peakToTroughCtx{:});
+allHalfWaveCtx = cat(2,halfWaveCtx{:});
+
+
+% do GMM
+mixtureModelStr = fitgmdist(allPeakToTroughStr'/30*1000,2);
+mixtureModelCtx = fitgmdist(allPeakToTroughCtx'/30*1000,2);
+
+if mixtureModelStr.ComponentProportion(1) > mixtureModelStr.ComponentProportion(2)
+    strInterModelInd = 2;
+    strSPNModelInd = 1;
+else
+    strInterModelInd = 1;
+    strSPNModelInd = 2;
+end
+
+if mixtureModelCtx.ComponentProportion(1) > mixtureModelCtx.ComponentProportion(2)
+    ctxInterModelInd = 2;
+    ctxWideModelInd = 1;
+else
+    ctxInterModelInd = 1;
+    ctxWideModelInd = 2;
+end
+
+% plot striatum
+gaussX = 0:775;
+gaussYInter = normpdf(gaussX,mixtureModelStr.mu(strInterModelInd),sqrt(mixtureModelStr.Sigma(strInterModelInd))) * ...
+    mixtureModelStr.ComponentProportion(strInterModelInd);
+gaussYSPN = normpdf(gaussX,mixtureModelStr.mu(strSPNModelInd),sqrt(mixtureModelStr.Sigma(strSPNModelInd))) * ...
+    mixtureModelStr.ComponentProportion(strSPNModelInd);
+
+strCutoff = gaussX(find(gaussYSPN>gaussYInter,1));
+
+figure;
+tiledlayout(2,1,'Padding','compact','TileSpacing','compact')
+nexttile
+histH = histogram(allPeakToTroughStr/30*1000,15);
+histH.EdgeColor = 'none';
+hold on
+plotH(1) = plot(gaussX,gaussYInter*(diff(histH.BinEdges)*histH.Values'),'r','LineWidth',2);
+plotH(2) = plot(gaussX,gaussYSPN*(diff(histH.BinEdges)*histH.Values'),'k','LineWidth',2);
+line(repmat(strCutoff,1,2),get(gca,'YLim'),'linestyle','--','linewidth',2,'color','k')
+
+legend(plotH,'Wide Waveform','Narrow Waveform','box','off','fontsize',14)
+box off
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+xlabel('Waveform Width (us)')
+ylabel('# of Cells')
+xlim([150 775])
+
+% plot cortex
+gaussX = 0:775;
+gaussYInter = normpdf(gaussX,mixtureModelCtx.mu(ctxInterModelInd),sqrt(mixtureModelCtx.Sigma(ctxInterModelInd))) * ...
+    mixtureModelCtx.ComponentProportion(ctxInterModelInd);
+gaussYWide = normpdf(gaussX,mixtureModelCtx.mu(ctxWideModelInd),sqrt(mixtureModelCtx.Sigma(ctxWideModelInd))) * ...
+    mixtureModelCtx.ComponentProportion(ctxWideModelInd);
+
+ctxCutoff = gaussX(find(gaussYWide>gaussYInter,1));
+
+nexttile
+histH = histogram(allPeakToTroughCtx/30*1000,16);
+histH.EdgeColor = 'none';
+hold on
+plotH(1) = plot(gaussX,gaussYInter*(diff(histH.BinEdges)*histH.Values'),'r','LineWidth',2);
+plotH(2) = plot(gaussX,gaussYWide*(diff(histH.BinEdges)*histH.Values'),'k','LineWidth',2);
+line(repmat(ctxCutoff,1,2),get(gca,'YLim'),'linestyle','--','linewidth',2,'color','k')
+
+legend(plotH,'Wide Waveform','Narrow Waveform','box','off','fontsize',14)
+box off
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+xlabel('Waveform Width (us)')
+ylabel('# of Cells')
+xlim([150 775])
+
+% now go back through each session and calculate properties for
+% interneurons vs projecting neurons
+for iSess = 1:length(sessionDirs)
+
+    % load in data
+    load(fullfile(sessionDirs{iSess},'ProcessedData','NeuralFiringRates10msBins30msGauss.mat'),'cortexInds','striatumInds','allFRs');
+    load(fullfile(sessionDirs{iSess},'ProcessedData','neuronDataStruct.mat'));
+    load(fullfile(sessionDirs{iSess},'ProcessedData','UMAPFRs','NeuronRegionProps.mat'))
+
+    striatumInds(strOutliers{iSess}) = [];
+    cortexInds(ctxOutliers{iSess}) = [];
+
+    strInterInds = peakToTroughStr{iSess}/30*1000 < strCutoff;
+    strSpnInds = peakToTroughStr{iSess}/30*1000 >= strCutoff;
+
+    strInterDataStructInds = striatumInds(strInterInds);
+    strInterProcessedDataInds = processedDataStriatumInds{iSess}(strInterInds);
+    strSpnDataStructInds = striatumInds(strSpnInds);
+    strSpnProcessedDataInds = processedDataStriatumInds{iSess}(strSpnInds);
+
+    ctxInterInds = peakToTroughCtx{iSess}/30*1000 < ctxCutoff;
+    ctxWideInds = peakToTroughCtx{iSess}/30*1000 >= ctxCutoff;
+
+    ctxInterDataStructInds = cortexInds(ctxInterInds);
+    ctxInterProcessedDataInds = processedDataCortexInds{iSess}(ctxInterInds);
+    ctxWideDataStructInds = cortexInds(ctxWideInds);
+    ctxWideProcessedDataInds = processedDataCortexInds{iSess}(ctxWideInds);
+
+    % look at waveform amplitudes
+    strInterAmps{iSess} = [neuronDataStruct(strInterDataStructInds).amplitude];
+    strSpnAmps{iSess} = [neuronDataStruct(strSpnDataStructInds).amplitude];
+
+    ctxInterAmps{iSess} = [neuronDataStruct(ctxInterDataStructInds).amplitude];
+    ctxWideAmps{iSess} = [neuronDataStruct(ctxWideDataStructInds).amplitude];
+
+    % average firing rates
+    strInterFRs{iSess} = regionAveSigs(strInterProcessedDataInds,:);
+    strSpnFRs{iSess} = regionAveSigs(strSpnProcessedDataInds,:);
+
+    ctxInterFRs{iSess} = regionAveSigs(ctxInterProcessedDataInds,:);
+    ctxWideFRs{iSess} = regionAveSigs(ctxWideProcessedDataInds,:);
+
+    % specificities
+    multiRegionSpec = sqrt(sum((regionAveSigs./sum(regionAveSigs,2)).^2,2));
+    strInterSpecs{iSess} = multiRegionSpec(strInterProcessedDataInds,:)';
+    strSpnSpecs{iSess} = multiRegionSpec(strSpnProcessedDataInds,:)';
+
+    ctxInterSpecs{iSess} = multiRegionSpec(ctxInterProcessedDataInds,:)';
+    ctxWideSpecs{iSess} = multiRegionSpec(ctxWideProcessedDataInds,:)';
+
+    %calc CDF
+    multiSpecCdfVals = 0:0.01:1;
+    strInterSpecsCdfFreqs{iSess} = calcCDF(strInterSpecs{iSess},multiSpecCdfVals);
+    strSpnSpecsCdfFreqs{iSess} = calcCDF(strSpnSpecs{iSess},multiSpecCdfVals);
+    ctxInterSpecsCdfFreqs{iSess} = calcCDF(ctxInterSpecs{iSess},multiSpecCdfVals);
+    ctxWideSpecsCdfFreqs{iSess} = calcCDF(ctxWideSpecs{iSess},multiSpecCdfVals);
+
+    % sparsities
+    strInterSpars{iSess} = sparsity(strInterProcessedDataInds);
+    strSpnSpars{iSess} = sparsity(strSpnProcessedDataInds);
+
+    ctxInterSpars{iSess} = sparsity(ctxInterProcessedDataInds); 
+    ctxWideSpars{iSess} = sparsity(ctxWideProcessedDataInds);
+
+    %calc CDF
+    sparsityCdfVals = 0:0.01:1;
+    strInterSparsCdfFreqs{iSess} = calcCDF(strInterSpars{iSess},sparsityCdfVals);
+    strSpnSparsCdfFreqs{iSess} = calcCDF(strSpnSpars{iSess},sparsityCdfVals);
+    ctxInterSparsCdfFreqs{iSess} = calcCDF(ctxInterSpars{iSess},sparsityCdfVals);
+    ctxWideSparsCdfFreqs{iSess} = calcCDF(ctxWideSpars{iSess},sparsityCdfVals);
+
+end
+
+% make bar plots for fraction of cells
+nStrNarrow = cellfun(@length,strInterAmps);
+nStrWide = cellfun(@length,strSpnAmps);
+nCtxNarrow = cellfun(@length,ctxInterAmps);
+nCtxWide = cellfun(@length,ctxWideAmps);
+
+figure
+scatterData(1,:) = [{nStrNarrow./(nStrNarrow+nStrWide)} {nStrWide./(nStrNarrow+nStrWide)}];
+scatterData(2,:) = [{nCtxNarrow./(nCtxNarrow+nCtxWide)} {nCtxWide./(nCtxNarrow+nCtxWide)}];
+
+barH = barScatterPlot(scatterData,'none',ones(2,2),repmat({[-0.05 0 0.05]},2,2),[]);
+set(gca,'xtick',[1.5 4.5])
+set(gca,'xticklabels',{'Striatum','Cortex'})
+xlim([0 6])
+ylabel('Fraction of Neurons')
+barH(1).FaceColor = plotColors(3,:);
+barH(2).FaceColor = plotColors(4,:);
+legend(barH,'Narrow','Wide','box','off')
+
+% make bar plots for firing rates
+figure;
+tiledlayout(2,1,"TileSpacing","compact",'Padding','compact')
+
+% first plot striatum
+nexttile
+scatterData = {};
+scatterData(:,1) = mat2cell([mean(cat(1,strInterFRs{:}),2) cat(1,strInterFRs{:})],sum(nStrNarrow),ones(1,8))';
+scatterData(:,2) = mat2cell([mean(cat(1,strSpnFRs{:}),2) cat(1,strSpnFRs{:})],sum(nStrWide),ones(1,8))';
+
+barH = barScatterPlot(scatterData,'sem',false(8,2));
+barH(1).FaceColor = plotColors(3,:);
+barH(2).FaceColor = plotColors(4,:);
+set(gca,'xtick',1.5:3:22.5)
+set(gca,'xticklabels',['All Behvs',behvRegionLabels])
+ylabel('Firing Rate (spks/s)')
+legend(barH,'Narrow','Wide','box','off')
+
+% next cortex
+nexttile
+scatterData = {};
+scatterData(:,1) = mat2cell([mean(cat(1,ctxInterFRs{:}),2) cat(1,ctxInterFRs{:})],sum(nCtxNarrow),ones(1,8))';
+scatterData(:,2) = mat2cell([mean(cat(1,ctxWideFRs{:}),2) cat(1,ctxWideFRs{:})],sum(nCtxWide),ones(1,8))';
+
+barH = barScatterPlot(scatterData,'sem',false(8,2));
+barH(1).FaceColor = plotColors(3,:);
+barH(2).FaceColor = plotColors(4,:);
+set(gca,'xtick',1.5:3:22.5)
+set(gca,'xticklabels',['All Behvs',behvRegionLabels])
+ylabel('Firing Rate (spks/s)')
+legend(barH,'Narrow','Wide','box','off')
+
+
+% make ecdfs for non-uniformity and sparsity
+figure;
+tiledlayout(2,3,'TileSpacing','compact','Padding','compact')
+
+% first non-uniformity
+allSessStrInterSpecs = cat(1,strInterSpecsCdfFreqs{:});
+allSessStrSpnSpecs = cat(1,strSpnSpecsCdfFreqs{:});
+allSessCtxInterSpecs = cat(1,ctxInterSpecsCdfFreqs{:});
+allSessCtxWideSpecs = cat(1,ctxWideSpecsCdfFreqs{:});
+
+% first striatum wide vs narrow
+nexttile
+hold on;
+for iSess = 1:length(sessionDirs)
+    firstHitMax = find(allSessStrInterSpecs(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessStrInterSpecs(iSess,1:firstHitMax),'Color',[plotColors(3,:) 0.2],'LineWidth',1.5);
+
+    firstHitMax = find(allSessStrSpnSpecs(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessStrSpnSpecs(iSess,1:firstHitMax),'Color',[plotColors(4,:) 0.2],'LineWidth',1.5);
+end
+
+catSessStrInterSpecs = calcCDF(cat(2,strInterSpecs{:}),multiSpecCdfVals);
+firstHitMax = find(catSessStrInterSpecs==1,1);
+legH(1) = plot(multiSpecCdfVals(1:firstHitMax),catSessStrInterSpecs(1:firstHitMax),'Color',plotColors(3,:),'LineWidth',3);
+
+catSessStrSpnSpecs = calcCDF(cat(2,strSpnSpecs{:}),multiSpecCdfVals);
+firstHitMax = find(catSessStrSpnSpecs==1,1);
+legH(2) = plot(multiSpecCdfVals(1:firstHitMax),catSessStrSpnSpecs(1:firstHitMax),'Color',plotColors(4,:),'LineWidth',3);
+
+box off
+set(gca,'XTick',0:0.2:1)
+set(gca,'XTickLabelRotation',0)
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+legend(legH,'Narrow','Wide','box','off','fontsize',14)
+xlabel('Behavior variability')
+ylabel('Frequency')
+title('Striatum')
+
+% next cortex wide vs narrow
+nexttile
+hold on;
+for iSess = 1:length(sessionDirs)
+    firstHitMax = find(allSessCtxInterSpecs(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessCtxInterSpecs(iSess,1:firstHitMax),'Color',[plotColors(3,:) 0.2],'LineWidth',1.5);
+
+    firstHitMax = find(allSessCtxWideSpecs(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessCtxWideSpecs(iSess,1:firstHitMax),'Color',[plotColors(4,:) 0.2],'LineWidth',1.5);
+end
+
+catSessCtxInterSpecs = calcCDF(cat(2,ctxInterSpecs{:}),multiSpecCdfVals);
+firstHitMax = find(catSessCtxInterSpecs==1,1);
+legH(1) = plot(multiSpecCdfVals(1:firstHitMax),catSessCtxInterSpecs(1:firstHitMax),'Color',plotColors(3,:),'LineWidth',3);
+
+catSessCtxWideSpecs = calcCDF(cat(2,ctxWideSpecs{:}),multiSpecCdfVals);
+firstHitMax = find(catSessCtxWideSpecs==1,1);
+legH(2) = plot(multiSpecCdfVals(1:firstHitMax),catSessCtxWideSpecs(1:firstHitMax),'Color',plotColors(4,:),'LineWidth',3);
+
+box off
+set(gca,'XTick',0:0.2:1)
+set(gca,'XTickLabelRotation',0)
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+legend(legH,'Narrow','Wide','box','off','fontsize',14)
+xlabel('Behavior variability')
+ylabel('Frequency')
+title('Cortex')
+
+
+% finally cortex wide vs striatum wide
+nexttile
+hold on;
+for iSess = 1:length(sessionDirs)
+    firstHitMax = find(allSessStrSpnSpecs(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessStrSpnSpecs(iSess,1:firstHitMax),'Color',[plotColors(2,:) 0.2],'LineWidth',1.5);
+
+    firstHitMax = find(allSessCtxWideSpecs(iSess,:)==1,1);
+    plot(multiSpecCdfVals(1:firstHitMax),allSessCtxWideSpecs(iSess,1:firstHitMax),'Color',[plotColors(1,:) 0.2],'LineWidth',1.5);
+end
+
+firstHitMax = find(catSessStrSpnSpecs==1,1);
+legH(1) = plot(multiSpecCdfVals(1:firstHitMax),catSessStrSpnSpecs(1:firstHitMax),'Color',plotColors(2,:),'LineWidth',3);
+
+firstHitMax = find(catSessCtxWideSpecs==1,1);
+legH(2) = plot(multiSpecCdfVals(1:firstHitMax),catSessCtxWideSpecs(1:firstHitMax),'Color',plotColors(1,:),'LineWidth',3);
+
+box off
+set(gca,'XTick',0:0.2:1)
+set(gca,'XTickLabelRotation',0)
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+legend(legH,'Striatum','Cortex','box','off','fontsize',14)
+xlabel('Behavior variability')
+ylabel('Frequency')
+
+% next do sparsity
+allSessStrInterSpars = cat(1,strInterSparsCdfFreqs{:});
+allSessStrSpnSpars = cat(1,strSpnSparsCdfFreqs{:});
+allSessCtxInterSpars = cat(1,ctxInterSparsCdfFreqs{:});
+allSessCtxWideSpars = cat(1,ctxWideSparsCdfFreqs{:});
+
+% first striatum wide vs narrow
+nexttile
+hold on;
+for iSess = 1:length(sessionDirs)
+    firstHitMax = find(allSessStrInterSpars(iSess,:)==1,1);
+    plot(sparsityCdfVals(1:firstHitMax),allSessStrInterSpars(iSess,1:firstHitMax),'Color',[plotColors(3,:) 0.2],'LineWidth',1.5);
+
+    firstHitMax = find(allSessStrSpnSpars(iSess,:)==1,1);
+    plot(sparsityCdfVals(1:firstHitMax),allSessStrSpnSpars(iSess,1:firstHitMax),'Color',[plotColors(4,:) 0.2],'LineWidth',1.5);
+end
+
+catSessStrInterSpars = calcCDF(cat(2,strInterSpars{:}),sparsityCdfVals);
+firstHitMax = find(catSessStrInterSpars==1,1);
+legH(1) = plot(sparsityCdfVals(1:firstHitMax),catSessStrInterSpars(1:firstHitMax),'Color',plotColors(3,:),'LineWidth',3);
+
+catSessStrSpnSpars = calcCDF(cat(2,strSpnSpars{:}),sparsityCdfVals);
+firstHitMax = find(catSessStrSpnSpars==1,1);
+legH(2) = plot(sparsityCdfVals(1:firstHitMax),catSessStrSpnSpars(1:firstHitMax),'Color',plotColors(4,:),'LineWidth',3);
+
+box off
+set(gca,'XTick',0:0.2:1)
+set(gca,'XTickLabelRotation',0)
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+legend(legH,'Narrow','Wide','box','off','fontsize',14)
+xlabel('Sparsity')
+ylabel('Frequency')
+title('Striatum')
+
+% next cortex wide vs narrow
+nexttile
+hold on;
+for iSess = 1:length(sessionDirs)
+    firstHitMax = find(allSessCtxInterSpars(iSess,:)==1,1);
+    plot(sparsityCdfVals(1:firstHitMax),allSessCtxInterSpars(iSess,1:firstHitMax),'Color',[plotColors(3,:) 0.2],'LineWidth',1.5);
+
+    firstHitMax = find(allSessCtxWideSpars(iSess,:)==1,1);
+    plot(sparsityCdfVals(1:firstHitMax),allSessCtxWideSpars(iSess,1:firstHitMax),'Color',[plotColors(4,:) 0.2],'LineWidth',1.5);
+end
+
+catSessCtxInterSpars = calcCDF(cat(2,ctxInterSpars{:}),sparsityCdfVals);
+firstHitMax = find(catSessCtxInterSpars==1,1);
+legH(1) = plot(sparsityCdfVals(1:firstHitMax),catSessCtxInterSpars(1:firstHitMax),'Color',plotColors(3,:),'LineWidth',3);
+
+catSessCtxWideSpars = calcCDF(cat(2,ctxWideSpars{:}),sparsityCdfVals);
+firstHitMax = find(catSessCtxWideSpars==1,1);
+legH(2) = plot(sparsityCdfVals(1:firstHitMax),catSessCtxWideSpars(1:firstHitMax),'Color',plotColors(4,:),'LineWidth',3);
+
+box off
+set(gca,'XTick',0:0.2:1)
+set(gca,'XTickLabelRotation',0)
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+legend(legH,'Narrow','Wide','box','off','fontsize',14)
+xlabel('Sparsity')
+ylabel('Frequency')
+title('Cortex')
+
+% finally cortex wide vs striatum wide
+nexttile
+hold on;
+for iSess = 1:length(sessionDirs)
+    firstHitMax = find(allSessStrSpnSpars(iSess,:)==1,1);
+    plot(sparsityCdfVals(1:firstHitMax),allSessStrSpnSpars(iSess,1:firstHitMax),'Color',[plotColors(2,:) 0.2],'LineWidth',1.5);
+
+    firstHitMax = find(allSessCtxWideSpars(iSess,:)==1,1);
+    plot(sparsityCdfVals(1:firstHitMax),allSessCtxWideSpars(iSess,1:firstHitMax),'Color',[plotColors(1,:) 0.2],'LineWidth',1.5);
+end
+
+firstHitMax = find(catSessStrSpnSpars==1,1);
+legH(1) = plot(sparsityCdfVals(1:firstHitMax),catSessStrSpnSpars(1:firstHitMax),'Color',plotColors(2,:),'LineWidth',3);
+
+firstHitMax = find(catSessCtxWideSpars==1,1);
+legH(2) = plot(sparsityCdfVals(1:firstHitMax),catSessCtxWideSpars(1:firstHitMax),'Color',plotColors(1,:),'LineWidth',3);
+
+
+box off
+set(gca,'XTick',0:0.2:1)
+set(gca,'XTickLabelRotation',0)
+set(gca,'fontsize',14)
+set(gca,'tickdir','out')
+set(gca,'linewidth',1.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'color','w')
+legend(legH,'Striatum wide','Cortex wide','box','off','fontsize',14)
+xlabel('Sparsity')
+ylabel('Frequency')
+
+
+
+function freq = calcCDF(inputData,range)
+
+% remove nans
+inputData(isnan(inputData)) = [];
+
+for i = 1:length(range)
+
+    freq(i) = sum(inputData <= range(i)) / length(inputData);
+
+end
+
+end
+
+
+% 

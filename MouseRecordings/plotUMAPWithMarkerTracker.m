@@ -5,10 +5,10 @@ function [plotH, functionVars]= plotUMAPWithMarkerTracker(currentFrame,initiateP
 
 if initiatePlot
 
-    load('UMAPTest.mat','reduction','behvLabels','analyzedBehaviors')
+    load('UMAP.mat','reduction','behvLabelsNoArt','analyzedBehaviors','origDownsampEMGInd')
     load('VideoSyncFrames.mat')
 
-    behvLabelsDown = behvLabels(1:5:end);
+    behvLabelsDown = behvLabelsNoArt(1:1:end);
 
     figH = figure('Color','w','Visible','on','units','pixels','OuterPosition',[100, 50, 1000, 1000]);
     hold on;
@@ -54,13 +54,18 @@ if initiatePlot
     functionVars{4} = trailLength;
     functionVars{5} = reduction;
     functionVars{6} = behvLabelsDown;
+    functionVars{7} = origDownsampEMGInd;
 
 else
 
     iVid = 1;
-    %get the current frame
+    %get the emg index at the current frame
     rawEMGInd = functionVarsIn{3}{1}{iVid}(currentFrame);
-    uMAPEMGInd = round(rawEMGInd/20/5);
+    uMAPEMGInd = find(round(rawEMGInd/20) == functionVarsIn{7});
+
+    if isempty(uMAPEMGInd)
+        return
+    end
     
     functionVarsIn{1}.XData = functionVarsIn{5}(uMAPEMGInd,1);
     functionVarsIn{1}.YData = functionVarsIn{5}(uMAPEMGInd,2);

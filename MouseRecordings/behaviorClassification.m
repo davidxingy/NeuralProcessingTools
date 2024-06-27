@@ -67,7 +67,23 @@ for iSess = 1:length(sessionDirs)
     behvLabels = regionAssignmentsFilteredBinned(reducIndsToUse);
 
     % do control by shifting behavior labels
-    nShifts = 0;
+    nShifts = 1;
+
+    %down sample different behavioral classes to balance class sizes
+    balanceClasses = false;
+    if balanceClasses
+
+        behvLabelsIds = unique(behvLabels);
+        leastPoints = min(histcounts(behvLabels));
+        for iRegion = 1:length(behvLabelsIds)
+            regionInds = find(behvLabels==behvLabelsIds(iRegion));
+            regionIndsDownsamp{iRegion} = regionInds(sort(randperm(length(regionInds),leastPoints)));
+        end
+
+        behvLabels = behvLabels([regionIndsDownsamp{:}]);
+        reducFRs = reducFRs(:,[regionIndsDownsamp{:}]);
+
+    end
 
     for iShift = 1:nShifts+1
         

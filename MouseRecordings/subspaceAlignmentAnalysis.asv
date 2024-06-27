@@ -1,0 +1,178 @@
+clear
+close all
+
+sessionNames = {'pcaAlignment_D020.mat','pcaAlignment_D024.mat','pcaAlignment_D026.mat'};
+
+plotXOffsets = [0 -0.06 0.06];
+
+spreadFigH = figure;
+hold on
+meanFigH = figure;
+hold on
+
+for iSess = 1:length(sessionNames)
+
+    load(sessionNames{iSess});
+
+    %calc summary metrics for the random rotations control
+    for iShuff = 1:size(pcaNeurAligment10DimOrthCtx,3)
+
+        ctxSpreadRot(iSess,iShuff) = std(squareform(pcaNeurAligment10DimOrthCtx(:,:,iShuff)));
+        ctxMeanRot(iSess,iShuff) = mean(squareform(pcaNeurAligment10DimOrthCtx(:,:,iShuff)));
+        strSpreadRot(iSess,iShuff) = std(squareform(pcaNeurAligment10DimOrthStr(:,:,iShuff)));
+        strMeanRot(iSess,iShuff) = mean(squareform(pcaNeurAligment10DimOrthStr(:,:,iShuff)));
+        emgSpreadRot(iSess,iShuff) = std(squareform(pcaNeurAligment10DimOrthEmg(:,:,iShuff)));
+        emgMeanRot(iSess,iShuff) = mean(squareform(pcaNeurAligment10DimOrthEmg(:,:,iShuff)));
+
+    end
+
+    for iShuff = 1:size(pcaNeurAligment10DimShuffCtx,3)
+
+        ctxSpreadShuff(iSess,iShuff) = std(squareform(pcaNeurAligment10DimShuffCtx(:,:,iShuff)));
+        ctxMeanShuff(iSess,iShuff) = mean(squareform(pcaNeurAligment10DimShuffCtx(:,:,iShuff)));
+        strSpreadShuff(iSess,iShuff) = std(squareform(pcaNeurAligment10DimShuffStr(:,:,iShuff)));
+        strMeanShuff(iSess,iShuff) = mean(squareform(pcaNeurAligment10DimShuffStr(:,:,iShuff)));
+        emgSpreadShuff(iSess,iShuff) = std(squareform(pcaNeurAligment10DimShuffEmg(:,:,iShuff)));
+        emgMeanShuff(iSess,iShuff) = mean(squareform(pcaNeurAligment10DimShuffEmg(:,:,iShuff)));
+
+    end
+
+    ctxSpread(iSess) = std(squareform(pcaNeurAligment10DimCtx));
+    ctxMean(iSess) = mean(squareform(pcaNeurAligment10DimCtx));
+
+    strSpread(iSess) = std(squareform(pcaNeurAligment10DimStr));
+    strMean(iSess) = mean(squareform(pcaNeurAligment10DimStr));
+
+    emgSpread(iSess) = std(squareform(pcaNeurAligment10DimEmg));
+    emgMean(iSess) = mean(squareform(pcaNeurAligment10DimEmg));
+
+    allSessAlignmentsCtx{iSess} = squareform(pcaNeurAligment10DimCtx);
+    allSessAlignmentsStr{iSess} = squareform(pcaNeurAligment10DimStr);
+    allSessAlignmentsEmg{iSess} = squareform(pcaNeurAligment10DimEmg);
+
+    plotXVals(iSess,:) = (1:2)+plotXOffsets(iSess);
+
+end
+
+controlPlotColors = lines(3);
+for iSess = 1:length(sessionNames)
+
+    %first plot spread
+    figure(spreadFigH);
+    plot(plotXVals(iSess,:),[ctxSpread(iSess) strSpread(iSess)],'o-','MarkerSize',5,'Color',[0.3 0.3 0.3],'MarkerFaceColor',[0.3 0.3 0.3])
+    
+    %plot controls
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxSpreadRot,2))+0.005,ctxSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strSpreadRot,2))+0.005,strSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgSpreadRot,2)),emgSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+%     alpha(plotH,0.2)
+
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxSpreadShuff,2))-0.005,ctxSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strSpreadShuff,2))-0.005,strSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgSpreadShuff,2)),emgSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+%     alpha(plotH,0.2)
+
+
+    %next plot means
+    figure(meanFigH);
+    plot(plotXVals(iSess,:),[ctxMean(iSess) strMean(iSess)],'o-','MarkerSize',5,'Color',[0.3 0.3 0.3],'MarkerFaceColor',[0.3 0.3 0.3])
+    
+    %plot controls
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxMeanRot,2))+0.005,ctxMeanRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strMeanRot,2))+0.005,strMeanRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgMeanRot,2)),emgMeanRot(iSess,:),10,controlPlotColors(1,:),'filled');
+%     alpha(plotH,0.2)
+
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxMeanShuff,2))-0.005,ctxMeanShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strMeanShuff,2))-0.005,strMeanShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgMeanShuff,2)),emgMeanShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+%     alpha(plotH,0.2)
+
+end
+
+% plot EMG Spread separately
+emgFigH = figure;
+%plot spread and controls
+plot(plotXOffsets, emgSpread(iSess),'o-','MarkerSize',5,'Color',[0.3 0.3 0.3],'MarkerFaceColor',[0.3 0.3 0.3])
+hold on
+for iSess = 1:length(sessionNames)
+    plotH = scatter(repmat(plotXOffsets(iSess),1,size(emgSpreadRot,2))+0.005,emgSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXOffsets(iSess),1,size(emgSpreadRot,2))+0.005,emgSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+end
+
+
+
+% make pretty
+
+figure(spreadFigH);
+set(gca,'XTick',[1 2])
+set(gca,'XTickLabel',{'Cortex','Striatum'})
+ylabel('Std dev of divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+xlim([0.5 2.5])
+
+figure(meanFigH);
+set(gca,'XTick',[1 2])
+set(gca,'XTickLabel',{'Cortex','Striatum'})
+ylabel('Mean of divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+xlim([0.5 2.5])
+
+figure(emgFigH);
+set(gca,'XTick',[0])
+set(gca,'XTickLabel',{'EMG'})
+ylabel('Std dev of divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+xlim([0.5 2.5])
+
+% plot EMG correlations
+allEMGs = [allSessAlignmentsEmg{:}];
+allStrs = [allSessAlignmentsStr{:}];
+allCtxs = [allSessAlignmentsCtx{:}];
+
+figure;
+scatter(allEMGs,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allEMGs,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.05,0.75,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+xlabel('EMG Divergence')
+ylabel('Stiratum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+
+figure;
+scatter(allCtxs,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allCtxs,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.08,0.75,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+xlabel('Cortex Divergence')
+ylabel('Stiratum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+
+
+% 
