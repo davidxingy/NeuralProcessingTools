@@ -300,14 +300,14 @@ if doCrossRegion
                     end
 
                     %get polynomial fit
-                    twoEMGEstBoth = twoTrainBothCent{iRegion1,iRegion2,iFold}'*decoderWeightsTwoBoth{iRegion1,iRegion2,iFold}';
-                    twoEMGEstStr = twoTrainStrCent{iRegion1,iRegion2,iFold}'*decoderWeightsTwoStr{iRegion1,iRegion2,iFold}';
-                    twoEMGEstCtx = twoTrainCtxCent{iRegion1,iRegion2,iFold}'*decoderWeightsTwoCtx{iRegion1,iRegion2,iFold}';
+                    twoEMGEstBoth = twoTrainBothCent'*decoderWeightsTwoBoth{iRegion1,iRegion2,iFold}';
+                    twoEMGEstStr = twoTrainStrCent'*decoderWeightsTwoStr{iRegion1,iRegion2,iFold}';
+                    twoEMGEstCtx = twoTrainCtxCent'*decoderWeightsTwoCtx{iRegion1,iRegion2,iFold}';
 
                     for iChan = 1:size(twoEMGEstBoth,2)
-                        polyFitWeightsTwoBoth{iRegion1,iRegion2,iFold}(iChan,:) = polyfit(twoEMGEstBoth(:,iChan),twoTrainEMGCent{iRegion1,iRegion2,iFold}(iChan,:),3);
-                        polyFitWeightsTwoCtx{iRegion1,iRegion2,iFold}(iChan,:) = polyfit(twoEMGEstStr(:,iChan),twoTrainEMGCent{iRegion1,iRegion2,iFold}(iChan,:),3);
-                        polyFitWeightsTwoStr{iRegion1,iRegion2,iFold}(iChan,:) = polyfit(twoEMGEstCtx(:,iChan),twoTrainEMGCent{iRegion1,iRegion2,iFold}(iChan,:),3);
+                        polyFitWeightsTwoBoth{iRegion1,iRegion2,iFold}(iChan,:) = polyfit(twoEMGEstBoth(:,iChan),twoTrainEMGCent(iChan,:),3);
+                        polyFitWeightsTwoCtx{iRegion1,iRegion2,iFold}(iChan,:) = polyfit(twoEMGEstStr(:,iChan),twoTrainEMGCent(iChan,:),3);
+                        polyFitWeightsTwoStr{iRegion1,iRegion2,iFold}(iChan,:) = polyfit(twoEMGEstCtx(:,iChan),twoTrainEMGCent(iChan,:),3);
                     end
 
                 end
