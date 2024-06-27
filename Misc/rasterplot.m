@@ -27,8 +27,16 @@ if ~exist('yPos')
     yPos = 1:length(spikes);
 end
 
+if nargin == 7
 
-plot_prop=reshape(varargin,length(varargin)/2,2);
+    plotProps = varargin{1};
+
+else
+    
+    plotProps = [];
+
+end
+
 
 axes(ax);
 switch lower(inputtype)
@@ -61,9 +69,15 @@ switch lower(inputtype)
             switch plottype
                 case '|'
                     line([spikes{whichneuron}';spikes{whichneuron}'],...
-                        repmat([yPos(whichneuron)-0.4; s(whichneuron)+0.4],1,numspikes),'color','k');
+                        repmat([yPos(whichneuron)-0.4; yPos(whichneuron)+0.4],1,numspikes),'color','k','linewidth',3);
                 otherwise
-                    scatter(spikes{whichneuron},repmat(yPos(whichneuron),1,numspikes),[plottype 'k'],'sizedata', 20)
+                    plotH = scatter(spikes{whichneuron},repmat(yPos(whichneuron),1,numspikes),[plottype 'k'],'sizedata', 20);
+                    for iPlotProp = 1:length(plotProps)/2
+
+                        set(plotH,plotProps{iPlotProp*2-1},plotProps{iPlotProp*2})
+
+                    end
+
             end
             
         end

@@ -20,7 +20,6 @@ for iClass = 1:length(classLabels)
 
     for iClassCross = 1:length(classLabels)
 
-
         strConfMat(iClass,iClassCross) = sum(thisClassStrPreds==classLabels(iClassCross))/length(realClassInds);
         ctxConfMat(iClass,iClassCross) = sum(thisClassCtxPreds==classLabels(iClassCross))/length(realClassInds);
 
@@ -114,5 +113,29 @@ set(gca,'FontSize',13)
 set(gca,'XColor','k')
 set(gca,'YColor','k')
 set(gcf,'Color','w')
+
+% calculate sparsity of the weights as the L1 norm of the weights
+for iSess = 1:size(pcaProjStr)
+    for iRegion = 1:size(pcaProjStr,2)
+
+        nDimsStr(iSess,iRegion) = length(varExpStr{iSess,iRegion});% find(cumsum(varExpStr{iSess,iRegion})/sum(varExpStr{iSess,iRegion})>0.9,1);
+        nDimsCtx(iSess,iRegion) = length(varExpCtx{iSess,iRegion});%find(cumsum(varExpCtx{iSess,iRegion})/sum(varExpCtx{iSess,iRegion})>0.9,1);
+
+        directSparse = sum(abs(pcaProjStr{iSess,iRegion}(:,1:nDimsStr(iSess,iRegion))));
+        strWeightsSpars{iSess,iRegion} = (directSparse-1)/(sqrt(length(varExpStr{iSess,iRegion}))-1);
+        directSparse = sum(abs(pcaProjCtx{iSess,iRegion}(:,1:nDimsCtx(iSess,iRegion))));
+        ctxWeightsSpars{iSess,iRegion} = (directSparse-1)/(sqrt(length(varExpCtx{iSess,iRegion}))-1);
+
+    end
+end
+
+strWeightsSparsAll = cat(2,strWeightsSpars{:});
+ctxWeightsSparsAll = cat(2,ctxWeightsSpars{:});
+
+bar([mean(strWeightsSparsAll) mean(ctxWeightsSparsAll)])
+hold on
+errorbar([mean(strWeightsSparsAll) mean(ctxWeightsSparsAll)],[std(strWeightsSparsAll)/sqrt(length(strWeightsSparsAll)) std(ctxWeightsSparsAll)/sqrt(length(ctxWeightsSparsAll))],'.','Marker','none')
+xlim([0 3])
+ylim([0 1])
 
 % 

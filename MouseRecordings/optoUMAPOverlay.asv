@@ -257,9 +257,7 @@ end
 for iShuff = 1:nShuffs
 
     shuffHeatMapInput = stimHeatMapInput;
-    shuffHeatMapInput.reducSigs = allEmgNoStimShuff{iShuff};
-    shuffHeatMapInput.reducIndsToUse = allNoUseShuffInds{iShuff};
-
+    
     [heatMapShuff(:,:,:,iShuff), heatMapFiltShuff(:,:,:,iShuff), ~ , shuffNPoints] = ...
         calcActivityMap(shuffHeatMapInput);
     heatMapShuffDiff(:,:,:,iShuff) = heatMapNoStim - heatMapShuff(:,:,:,iShuff);
@@ -272,12 +270,8 @@ for iShuff = 1:nShuffs
 %         heatMapShuffDiffFilt(:,:,iChan,iShuff) = fftshift(real(ifft2(fft2(gaussKernal).*fft2(heatMapShuffDiff(:,:,iChan,iShuff)))));
 %     end
     
-    shuffControlHeatMapInput = stimHeatMapInput;
-    shuffControlHeatMapInput.reducSigs = allEmgNoStimControlShuff{iShuff};
-    shuffControlHeatMapInput.reducIndsToUse = allNoUseControlShuffInds{iShuff};
-
     [heatMapShuffControl(:,:,:,iShuff), heatMapFiltShuffControl(:,:,:,iShuff)] = ...
-        calcActivityMap(shuffControlHeatMapInput);
+        calcActivityMap(shuffControlHeatMapInput(iShuff));
     heatMapShuffDiffControl(:,:,:,iShuff) = heatMapNoStimControl - heatMapShuffControl(:,:,:,iShuff);
     
 end

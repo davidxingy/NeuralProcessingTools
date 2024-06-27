@@ -1,4 +1,4 @@
-    function [regionAssignments, regionAssignmentsNoBound, regionAssignmentsFiltered] = assignUMapRegions(umapFile, densityGaussStd, nGridPoints, nRegions, jumpMinDuration)
+    function [regionAssignments, regionAssignmentsNoBound, regionAssignmentsFiltered] = assignUMapRegions(umapFile, densityGaussStd, nGridPoints, nRegions, jumpMinDuration,templateUMAPFile)
 % [regionAssignments, regionAssignmentsNoBound, regionAssignmentsFiltered] = assignUMapRegions(umapFile, densityGaussStd, nGridPoints, nRegions, jumpMinDuration)
 % 
 % Function to cluster UMap embedding space into distinct regions using
@@ -21,6 +21,11 @@
 %                     labels, the duration of a jump to a different cluster
 %                     which will be filtered out (in ms).
 % 
+% templateUMAPFile  - If the region boundaries have already been assigned
+%                     by a previous session, can use the boundaries from
+%                     that and will just divy up the data in the current
+%                     session (so no user input required).
+% 
 % David Xing, last updated 2/10/2023
 
 % set defaults
@@ -40,103 +45,150 @@ if isempty(jumpMinDuration)
     jumpMinDuration = 1;
 end
 
-load(umapFile,'reduction','analyzedBehaviors','behvLabelsDown','behvLabelsNoArt','origDownsampEMGInd')
-% get density and watershed
-pointsToUse = reduction;
-pointsToUse(behvLabelsNoArt == 0,:) = [];
-behvLabelsNoBack = behvLabelsNoArt;
-behvLabelsNoBack(behvLabelsNoArt == 0) = [];
+load(umapFile,'reduction','origDownsampEMGInd')
 
-reducLimsX1 = min(min(reduction(:,1)))*1.5-2;
-reducLimsX2 = max(max(reduction(:,1)))*1.5+2;
-reducLimsY1 = min(min(reduction(:,2)))*1.5-2;
-reducLimsY2 = max(max(reduction(:,2)))*1.5+2;
+if isempty(templateUMAPFile) || nargin < 6
 
-[gridXInds,gridYInds, density] = findPointDensity(pointsToUse,densityGaussStd,nGridPoints,[reducLimsX1 reducLimsX2 reducLimsY1 reducLimsY2]);
-densityNormalized = (max(max(density))-density)/max(max(density));
-densityNormalizedProcessed = imhmin(densityNormalized,0.1);
-watershedRegions = watershed(densityNormalizedProcessed);
+    load(umapFile,'analyzedBehaviors','behvLabelsNoArt')
 
-figH = figure;
-axH = axes('Parent', figH);
+    origDownsampEMGInd = origDownsampEMGInd(behvLabelsNoArt~=0);
 
-% plot the density
-imagesc(gridXInds,gridYInds,density)
-[boundaryYs,boundaryXs] = find(watershedRegions==0);
-hold on
-% also plot the labeled points
-colormap = turbo(length(analyzedBehaviors));
-for iBehv = 1:length(analyzedBehaviors)
-    plot(reduction(behvLabelsNoArt==iBehv,1),reduction(behvLabelsNoArt==iBehv,2),'.','color',colormap(iBehv,:),'MarkerSize',2)
-end
-% plot watershed boundaries
-plot(gridXInds(boundaryXs),gridYInds(boundaryYs),'k.')
-set(gca,'ydir','normal')
+    % get density and watershed
+    pointsToUse = reduction;
+    pointsToUse(behvLabelsNoArt == 0,:) = [];
+    behvLabelsNoBack = behvLabelsNoArt;
+    behvLabelsNoBack(behvLabelsNoArt == 0) = [];
+
+    reducLimsX1 = min(min(reduction(:,1)))*1.5-2;
+    reducLimsX2 = max(max(reduction(:,1)))*1.5+2;
+    reducLimsY1 = min(min(reduction(:,2)))*1.5-2;
+    reducLimsY2 = max(max(reduction(:,2)))*1.5+2;
+
+    [gridXInds,gridYInds, density] = findPointDensity(pointsToUse,densityGaussStd,nGridPoints,[reducLimsX1 reducLimsX2 reducLimsY1 reducLimsY2]);
+    densityNormalized = (max(max(density))-density)/max(max(density));
+    densityNormalizedProcessed = imhmin(densityNormalized,0.03);
+    watershedRegions = watershed(densityNormalizedProcessed);
+
+    figH = figure;
+    axH = axes('Parent', figH);
+
+    % plot the density
+    imagesc(gridXInds,gridYInds,density)
+    [boundaryYs,boundaryXs] = find(watershedRegions==0);
+    hold on
+    % also plot the labeled points
+    colormap = turbo(length(analyzedBehaviors));
+    for iBehv = 1:length(analyzedBehaviors)
+        plotData = reduction(behvLabelsNoArt==iBehv,:);
+        plot(plotData(1:1:end,1),plotData(1:1:end,2),'.','color',colormap(iBehv,:),'MarkerSize',0.1)
+    end
+    % plot watershed boundaries
+    plot(gridXInds(boundaryXs),gridYInds(boundaryYs),'k.')
+    set(gca,'ydir','normal')
 
 
-for iRegion = 1:nRegions
+    for iRegion = 1:nRegions
 
-    iRegionSelection = 1;
-    contGettingPoints = 1;
-    disp(['Select points for Region ' num2str(iRegion)])
-    
-    while contGettingPoints
-        
-        selectedPoint = ginput(1);
-        [~, xPoint] = min(abs(selectedPoint(1)-gridXInds));
-        [~, yPoint] = min(abs(selectedPoint(2)-gridYInds));
-        watershedRegionsFlip = flipud(watershedRegions);
-        regionWatershedLabels{iRegion}(iRegionSelection) = watershedRegions(yPoint,xPoint);
-        iRegionSelection = iRegionSelection + 1;
-        
-        %mask out the region that was selected (so it's easier for the user
-        %to see what has already been selected)
-        mask = zeros(nGridPoints,nGridPoints);
-        mask(watershedRegions == watershedRegions(yPoint,xPoint)) = 1;
-        imagesc(gridXInds, gridYInds, watershedRegions/max(max(watershedRegions))/1000, 'AlphaData', mask);
-        morePointsInput = input('Select more points? [Y/N]: ','s');
-        if strcmpi(morePointsInput,'y')
-            contGettingPoints = 1;
-        elseif strcmpi(morePointsInput,'n')
-            contGettingPoints = 0;
-        else
-            continue
+        iRegionSelection = 1;
+        contGettingPoints = 1;
+        disp(['Select points for Region ' num2str(iRegion)])
+
+        regionWatershedLabels{iRegion} = [];
+        while contGettingPoints
+
+            selectRect = true;
+            if ~selectRect
+                selectedPoint = ginput(1);
+                [~, xPoint] = min(abs(selectedPoint(1)-gridXInds));
+                [~, yPoint] = min(abs(selectedPoint(2)-gridYInds));
+                selectedRegionLabels = watershedRegions(yPoint,xPoint);
+                regionWatershedLabels{iRegion}(iRegionSelection) = selectedRegionLabels;
+            else
+                selectedRect = drawrectangle();
+                rectPoints = [selectedRect.Vertices(1,1), selectedRect.Vertices(3,1), ...
+                    selectedRect.Vertices(1,2), selectedRect.Vertices(3,2),];
+                [~, xPointStart] = min(abs(rectPoints(1)-gridXInds));
+                [~, xPointStop] = min(abs(rectPoints(2)-gridXInds));
+                [~, yPointStart] = min(abs(rectPoints(3)-gridYInds));
+                [~, yPointStop] = min(abs(rectPoints(4)-gridYInds));
+                delete(selectedRect)
+                selectedRegionLabels = unique(watershedRegions(min([yPointStart yPointStop]):max([yPointStart yPointStop]),...
+                    min([xPointStart xPointStop]):max([xPointStart xPointStop])));
+                selectedRegionLabels(selectedRegionLabels==0) = [];
+                regionWatershedLabels{iRegion} = unique([regionWatershedLabels{iRegion} selectedRegionLabels']);
+            end
+            iRegionSelection = iRegionSelection + 1;
+
+            %mask out the region that was selected (so it's easier for the user
+            %to see what has already been selected)
+
+            if iRegionSelection == 2
+                mask = zeros(nGridPoints,nGridPoints);
+                for iSubRegion = 1:length(selectedRegionLabels)
+                    mask(watershedRegions == selectedRegionLabels(iSubRegion)) = 1;
+                end
+                maskH = imagesc(gridXInds, gridYInds, watershedRegions/max(max(watershedRegions))/1000, 'AlphaData', mask);
+            else
+                for iSubRegion = 1:length(selectedRegionLabels)
+                    mask(watershedRegions == selectedRegionLabels(iSubRegion)) = 1;
+                end
+                set(maskH,'AlphaData',mask);
+            end
+
+            morePointsInput = input('Select more points? [Y/N]: ','s');
+            if strcmpi(morePointsInput,'y')
+                contGettingPoints = 1;
+            elseif strcmpi(morePointsInput,'n')
+                contGettingPoints = 0;
+            else
+                continue
+            end
+
         end
-        
-    end
-    
-end
 
-% now remap watershed labels to merge the areas that were selected to be
-% part of the same region
-
-largestLabel = max(max(watershedRegions));
-for iRegion = 1:nRegions
-
-    newRegionLabel = largestLabel + iRegion;
-    for iSubregion = 1:length(regionWatershedLabels{iRegion})
-        watershedRegions(watershedRegions == regionWatershedLabels{iRegion}(iSubregion)) = newRegionLabel;
-    end
-    regionWatershedLabels{iRegion} = newRegionLabel;
-
-end
-regionWatershedLabels = [regionWatershedLabels{:}];
-
-% also remove any boundary points that were separating areas within the
-% same region
-% those boundries now are surrounded by the same label
-
-for iBoundry = 1:length(boundaryXs)
-    
-    boundaryAreaLabels = unique(watershedRegions(max(boundaryXs(iBoundry)-1,1):min(boundaryXs(iBoundry)+1,nGridPoints),...
-        max(boundaryYs(iBoundry)-1,1):min(boundaryYs(iBoundry)+1,nGridPoints)));
-
-    boundaryAreaLabels(boundaryAreaLabels==0) = [];
-
-    if length(boundaryAreaLabels) == 1
-        watershedRegions(boundaryXs(iBoundry),boundaryYs(iBoundry)) = boundaryAreaLabels;
     end
 
+    % now remap watershed labels to merge the areas that were selected to be
+    % part of the same region
+
+    largestLabel = max(max(watershedRegions));
+    for iRegion = 1:nRegions
+
+        newRegionLabel = largestLabel + iRegion;
+        for iSubregion = 1:length(regionWatershedLabels{iRegion})
+            watershedRegions(watershedRegions == regionWatershedLabels{iRegion}(iSubregion)) = newRegionLabel;
+        end
+        regionWatershedLabels{iRegion} = newRegionLabel;
+
+    end
+    regionWatershedLabels = [regionWatershedLabels{:}];
+
+    % also remove any boundary points that were separating areas within the
+    % same region
+    % those boundries now are surrounded by the same label
+
+    for iBoundry = 1:length(boundaryXs)
+
+        boundaryAreaLabels = unique(watershedRegions(max(boundaryYs(iBoundry)-1,1):min(boundaryYs(iBoundry)+1,nGridPoints),...
+            max(boundaryXs(iBoundry)-1,1):min(boundaryXs(iBoundry)+1,nGridPoints)));
+
+        if ~any(boundaryAreaLabels==0)
+            error('Something wrong when removing intra-region boundaries from watershed')
+        end
+
+        boundaryAreaLabels(boundaryAreaLabels==0) = [];
+
+        if length(boundaryAreaLabels) == 1
+            watershedRegions(boundaryYs(iBoundry),boundaryXs(iBoundry)) = boundaryAreaLabels;
+        end
+
+    end
+
+else
+    %just load the watershed region boundaries from template file
+    load(templateUMAPFile,'gridXInds','gridYInds','watershedRegions','regionWatershedLabels','regionBehvAssignments')
+    nRegions = length(regionWatershedLabels);
+    nGridPoints = length(gridXInds);
 end
 
 % assign regions to each time point in reduction by finding the closest
@@ -151,33 +203,36 @@ regionAssignments = double(watershedRegions(regionSpaceinds));
 
 % go through each region and see if we can associate particular behaviors
 % to each of them
+if isempty(templateUMAPFile) || nargin < 6
 
-% first find the number of labeled points for each behavior within each
-% subregion
-for iReg = 1:length(regionWatershedLabels)
+    % first find the number of labeled points for each behavior within each
+    % subregion
+    for iReg = 1:length(regionWatershedLabels)
 
-    %get the labels at each of the subregions
-    regionInds = find(regionAssignments == regionWatershedLabels(iReg));
-    regionLabels{iReg} = behvLabelsNoArt(regionInds);
-    regionLabels{iReg}(regionLabels{iReg} == 0) = [];
+        %get the labels at each of the subregions
+        regionInds = find(regionAssignments == regionWatershedLabels(iReg));
+        regionLabels{iReg} = behvLabelsNoArt(regionInds);
+        regionLabels{iReg}(regionLabels{iReg} == 0) = [];
 
-    %save the number of labels of each behavior at each subregion
+        %save the number of labels of each behavior at each subregion
+        for iBehv = 1:length(analyzedBehaviors)
+            numBehvPoints(iBehv,iReg) = sum(regionLabels{iReg} == iBehv);
+        end
+
+    end
+
+    % for each behavior, assign to region based on a threshold
+    percentageInRegionThresh = 70;
+    regionBehvAssignments = cell(1,length(regionWatershedLabels));
     for iBehv = 1:length(analyzedBehaviors)
-        numBehvPoints(iBehv,iReg) = sum(regionLabels{iReg} == iBehv);
+        behvRegionPercentages = numBehvPoints(iBehv,:)/sum(numBehvPoints(iBehv,:))*100;
+        associatedRegions = find(behvRegionPercentages > percentageInRegionThresh);
+
+        for iReg = 1:length(associatedRegions)
+            regionBehvAssignments{associatedRegions(iReg)} = [regionBehvAssignments{associatedRegions(iReg)} iBehv];
+        end
     end
 
-end
-
-% for each behavior, assign to region based on a threshold
-percentageInRegionThresh = 70;
-regionBehvAssignments = cell(1,length(regionWatershedLabels));
-for iBehv = 1:length(analyzedBehaviors)
-    behvRegionPercentages = numBehvPoints(iBehv,:)/sum(numBehvPoints(iBehv,:))*100;
-    associatedRegions = find(behvRegionPercentages > percentageInRegionThresh);
-    
-    for iReg = 1:length(associatedRegions)
-        regionBehvAssignments{associatedRegions(iReg)} = [regionBehvAssignments{associatedRegions(iReg)} iBehv];
-    end
 end
 
 figure;

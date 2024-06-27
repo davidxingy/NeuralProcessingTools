@@ -287,16 +287,16 @@ if doCrossRegion
                     thisTwoTrainStr = cat(2,twoTrainStr{iRegion1,iFold},twoTrainStr{iRegion2,iFold});
                     thisTwoTrainCtx = cat(2,twoTrainCtx{iRegion1,iFold},twoTrainCtx{iRegion2,iFold});
 
-                    twoTrainEMGCent = thisTwoTrainEMG - nanmean(thisTwoTrainEMG,2);
-                    twoTrainBothCent = thisTwoTrainBoth - nanmean(thisTwoTrainBoth,2);
-                    twoTrainStrCent = thisTwoTrainStr - nanmean(thisTwoTrainStr,2);
-                    twoTrainCtxCent = thisTwoTrainCtx - nanmean(thisTwoTrainCtx,2);
+                    twoTrainEMGCent{iRegion1,iRegion2,iFold} = thisTwoTrainEMG - nanmean(thisTwoTrainEMG,2);
+                    twoTrainBothCent{iRegion1,iRegion2,iFold} = thisTwoTrainBoth - nanmean(thisTwoTrainBoth,2);
+                    twoTrainStrCent{iRegion1,iRegion2,iFold} = thisTwoTrainStr - nanmean(thisTwoTrainStr,2);
+                    twoTrainCtxCent{iRegion1,iRegion2,iFold} = thisTwoTrainCtx - nanmean(thisTwoTrainCtx,2);
 
                     % linear weights
                     for iChan = 1:size(emgCent,1)
-                        decoderWeightsTwoBoth{iRegion1,iRegion2,iFold}(iChan,:) = ridge(twoTrainEMGCent(iChan,:)', twoTrainBothCent', 0.1);
-                        decoderWeightsTwoStr{iRegion1,iRegion2,iFold}(iChan,:) = ridge(twoTrainEMGCent(iChan,:)', twoTrainStrCent', 0.1);
-                        decoderWeightsTwoCtx{iRegion1,iRegion2,iFold}(iChan,:) = ridge(twoTrainEMGCent(iChan,:)', twoTrainCtxCent', 0.1);
+                        decoderWeightsTwoBoth{iRegion1,iRegion2,iFold}(iChan,:) = ridge(twoTrainEMGCent{iRegion1,iRegion2,iFold}(iChan,:)', twoTrainBothCent{iRegion1,iRegion2,iFold}', 0.1);
+                        decoderWeightsTwoStr{iRegion1,iRegion2,iFold}(iChan,:) = ridge(twoTrainEMGCent{iRegion1,iRegion2,iFold}(iChan,:)', twoTrainStrCent{iRegion1,iRegion2,iFold}', 0.1);
+                        decoderWeightsTwoCtx{iRegion1,iRegion2,iFold}(iChan,:) = ridge(twoTrainEMGCent{iRegion1,iRegion2,iFold}(iChan,:)', twoTrainCtxCent{iRegion1,iRegion2,iFold}', 0.1);
                     end
 
                     %get polynomial fit

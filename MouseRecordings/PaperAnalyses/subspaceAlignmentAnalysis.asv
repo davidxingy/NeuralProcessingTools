@@ -1,0 +1,741 @@
+clear
+close all
+
+sessionNames = {'pcaAlignment_D020.mat','pcaAlignment_D024.mat','pcaAlignment_D026.mat'};
+
+plotXOffsets = [0 -0.08 0.08];
+
+spreadFigH = figure;
+hold on
+meanFigH = figure;
+hold on
+
+exampleEMGSess = 3;
+exampleNeurSess = 3;
+
+
+inputData = 'umapregions';
+
+switch lower(inputData)
+    case 'umapregions'
+        load('X:\David\AnalysesData\PCASubspaces.mat')
+        load('X:\David\AnalysesData\EMGDistancesUMAP.mat')
+        behvRegionLabels = {'Climb Up','Climb Down','Misc/Jump','Walk','Misc/Rearing/Still','Groom','Eat'};
+
+        allBehvAlignPerms = [
+            1 2 3 4 5 6 7; ...
+            1 2 3 4 5 6 7; ...
+            1 2 4 5 3 6 7 ...
+            ];
+
+    case 'humanannotated'
+        load('X:\David\AnalysesData\PCASubspacesAnnotated.mat')
+        load('X:\David\AnalysesData\EMGDistancesAnnotated.mat')
+        behvRegionLabels = {'Climb Up','Climb Down','Jump Down','Walk Flat','Walk Grid','Rear','Groom','Eat'};
+
+        allBehvAlignPerms = repmat(1:8,3,1);
+
+end
+behvAlignPerm = allBehvAlignPerms(exampleEMGSess,:);
+
+for iSess = 1:length(sessionNames)
+
+    %calc summary metrics for the random rotations controls
+    for iShuff = 1:size(pcaDiverRotCtx,4)
+
+        ctxSpreadRot(iSess,iShuff) = std(squareform(squeeze(pcaDiverRotCtx(iSess,:,:,iShuff))));
+        ctxMeanRot(iSess,iShuff) = mean(squareform(squeeze(pcaDiverRotCtx(iSess,:,:,iShuff))));
+        strSpreadRot(iSess,iShuff) = std(squareform(squeeze(pcaDiverRotStr(iSess,:,:,iShuff))));
+        strMeanRot(iSess,iShuff) = mean(squareform(squeeze(pcaDiverRotStr(iSess,:,:,iShuff))));
+        emgSpreadRot(iSess,iShuff) = std(squareform(squeeze(pcaDiverRotEmg(iSess,:,:,iShuff))));
+        emgMeanRot(iSess,iShuff) = mean(squareform(squeeze(pcaDiverRotEmg(iSess,:,:,iShuff))));
+
+    end
+
+    %calc summary metrics for the behavior shift controls
+    for iShuff = 1:size(pcaDiverShiftCtx,4)
+
+        ctxSpreadShuff(iSess,iShuff) = std(squareform(squeeze(pcaDiverShiftCtx(iSess,:,:,iShuff))));
+        ctxMeanShuff(iSess,iShuff) = mean(squareform(squeeze(pcaDiverShiftCtx(iSess,:,:,iShuff))));
+        strSpreadShuff(iSess,iShuff) = std(squareform(squeeze(pcaDiverShiftStr(iSess,:,:,iShuff))));
+        strMeanShuff(iSess,iShuff) = mean(squareform(squeeze(pcaDiverShiftStr(iSess,:,:,iShuff))));
+        emgSpreadShuff(iSess,iShuff) = std(squareform(squeeze(pcaDiverShiftEmg(iSess,:,:,iShuff))));
+        emgMeanShuff(iSess,iShuff) = mean(squareform(squeeze(pcaDiverShiftEmg(iSess,:,:,iShuff))));
+
+    end
+
+    ctxSpread(iSess) = std(squareform(squeeze(pcaDiverCtx(iSess,:,:))));
+    ctxMean(iSess) = mean(squareform(squeeze(pcaDiverCtx(iSess,:,:))));
+
+    strSpread(iSess) = std(squareform(squeeze(pcaDiverStr(iSess,:,:))));
+    strMean(iSess) = mean(squareform(squeeze(pcaDiverStr(iSess,:,:))));
+
+    emgSpread(iSess) = std(squareform(squeeze(pcaDiverEmg(iSess,:,:))));
+    emgMean(iSess) = mean(squareform(squeeze(pcaDiverEmg(iSess,:,:))));
+
+    umapSpread(iSess) = std(squareform(squeeze(umapDists(iSess,:,:))));
+    umapMean(iSess) = mean(squareform(squeeze(umapDists(iSess,:,:))));
+
+    freqSpread(iSess) = std(squareform(squeeze(freqDists(iSess,:,:))));
+    freqMean(iSess) = mean(squareform(squeeze(freqDists(iSess,:,:))));
+
+    allSessAlignmentsCtx{iSess} = squareform(squeeze(pcaDiverCtx(iSess,:,:)));
+    allSessAlignmentsStr{iSess} = squareform(squeeze(pcaDiverStr(iSess,:,:)));
+    allSessAlignmentsEmg{iSess} = squareform(squeeze(pcaDiverEmg(iSess,:,:)));
+    allSessAlignmentsUmap{iSess} = squareform(squeeze(umapDists(iSess,:,:)));
+%     allSessAlignmentsTsne{iSess} = squareform(squeeze(tsneDists(iSess,:,:)));
+    allSessAlignmentsFreq{iSess} = squareform(squeeze(freqDists(iSess,:,:)));
+
+    allSessAlignmentsTimeEmg{iSess} = squareform(squeeze(timeEmgDists(iSess,:,:)));
+    allSessAlignmentsPcaEmg{iSess} = squareform(squeeze(pcaDists(iSess,:,:)));
+
+    plotXVals(iSess,:) = (1:2)+plotXOffsets(iSess);
+
+end
+
+
+% do statistical testing of rank correlation between umap distance and
+% subspace divergence
+nControlShuffs = 100;
+for iRegion = 1:size(pcaDiverCtx,2)
+
+    for iAnimal = 1:size(umapDists,1)
+        
+        %rank order the other regions based on UMAP distance
+        [~, umapRegionRank] = sort(squeeze(umapDists(iAnimal,iRegion,:)));
+        [~, freqRegionRank] = sort(squeeze(freqDists(iAnimal,iRegion,:)));
+
+        umapRegionRank = umapRegionRank(2:end);
+        freqRegionRank = freqRegionRank(2:end);
+
+        %rank order based on subspace divergence
+        [~, ctxRegionRank] = sort(squeeze(pcaDiverCtx(iAnimal,iRegion,:)));
+        [~, strRegionRank] = sort(squeeze(pcaDiverStr(iAnimal,iRegion,:)));
+
+        ctxRegionRank = ctxRegionRank(2:end);
+        strRegionRank = strRegionRank(2:end);
+
+        bestUmapCtxRank(iAnimal,iRegion) = find(ctxRegionRank == umapRegionRank(2))-1;
+        bestUmapStrRank(iAnimal,iRegion) = find(strRegionRank == umapRegionRank(2))-1;
+
+        bestFreqCtxRank(iAnimal,iRegion) = find(ctxRegionRank == freqRegionRank(2))-1;
+        bestFreqStrRank(iAnimal,iRegion) = find(strRegionRank == freqRegionRank(2))-1;
+
+        %get controls
+        for iShuff = 1:nControlShuffs
+            permInds = randperm(size(pcaDiverCtx,2));
+            ctxRankShuff = ctxRegionRank(permInds);
+            strRankShuff = strRegionRank(permInds);
+
+            bestUmapCtxRankShuff(iAnimal,iRegion,iShuff) = find(ctxRankShuff == umapRegionRank(2))-1;
+            bestUmapStrRankShuff(iAnimal,iRegion,iShuff) = find(strRankShuff == umapRegionRank(2))-1;
+
+            bestFreqCtxRankShuff(iAnimal,iRegion,iShuff) = find(ctxRankShuff == freqRegionRank(2))-1;
+            bestFreqStrRankShuff(iAnimal,iRegion,iShuff) = find(strRankShuff == freqRegionRank(2))-1;
+
+        end
+
+    end
+
+end
+
+
+
+% plot EMG Spread separately
+exampleEMG = squeeze(pcaDiverEmg(exampleEMGSess,:,:));
+exampleEMGShuff = squeeze(pcaDiverShiftEmg(exampleEMGSess,:,:,1));
+
+
+% plot example hiearchy
+plotColors = lines(7);
+% first do cortex
+figure('Units','normalized','OuterPosition',[0.1 0.1 0.445 0.7])
+tiledlayout(2,2,'Padding','compact','TileSpacing','compact')
+nexttile
+plotTitle = 'Cortex';
+imagesc(squeeze(pcaDiverCtx(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:))))
+set(gca,'XTick',1:length(behvRegionLabels))
+set(gca,'YTick',1:length(behvRegionLabels))
+set(gca,'XTickLabelRotation',30)
+set(gca,'XTickLabel',behvRegionLabels)
+set(gca,'YTickLabel',behvRegionLabels)
+set(gcf,'Color','w')
+set(gca,'LineWidth',1.5)
+set(gca,'FontSize',13)
+set(gca,'TickLength',[0 0])
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+cH = colorbar;
+% caxis([0 0.75])
+cH.Label.String = 'Divergence';
+title(plotTitle)
+
+% next do striatum
+nexttile
+plotTitle = 'Striatum';
+imagesc(squeeze(pcaDiverStr(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:))))
+set(gca,'XTick',1:length(behvRegionLabels))
+set(gca,'YTick',1:length(behvRegionLabels))
+set(gca,'XTickLabelRotation',30)
+set(gca,'XTickLabel',behvRegionLabels)
+set(gca,'YTickLabel',behvRegionLabels)
+set(gcf,'Color','w')
+set(gca,'LineWidth',1.5)
+set(gca,'FontSize',13)
+set(gca,'TickLength',[0 0])
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+cH = colorbar;
+% caxis([0 0.75])
+cH.Label.String = 'Divergence';
+title(plotTitle)
+
+% plot dendrograms
+% first cortex
+nexttile
+plotMatrix = squeeze(pcaDiverCtx(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:)));
+[~, dendPerm] = customDendrogram(linkage(squareform(plotMatrix)),[],gca,{'Linewidth',2,'Color','k'});
+% add an example shift control dendrogram
+plotMatrix = squeeze(pcaDiverShiftCtx(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:),1));
+customDendrogram(linkage(squareform(plotMatrix)),findInvPermInds(dendPerm)+0.15,gca,{'Linewidth',2,'color',[plotColors(3,:) 0.7]})
+plotMatrix = squeeze(pcaDiverRotCtx(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:),1));
+customDendrogram(linkage(squareform(plotMatrix)),findInvPermInds(dendPerm)+0.15,gca,{'Linewidth',2,'color',[plotColors(4,:) 0.7]})
+
+set(gca,'TickDir','out')
+set(gca,'LineWidth',2)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+set(gca,'FontSize',14)
+ylabel('Divergence')
+set(gca,'XTickLabel',behvRegionLabels(dendPerm))
+set(gca,'XTickLabelRotation',30)
+set(gca,'TickDir','out')
+ylim([0 0.3])
+axH = gca;
+
+% next striatum
+nexttile
+plotMatrix = squeeze(pcaDiverStr(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:)));
+[~, dendPerm] = customDendrogram(linkage(squareform(plotMatrix)),[],gca,{'Linewidth',2,'Color','k'});
+% add an example shift control dendrogram
+plotMatrix = squeeze(pcaDiverShiftStr(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:),1));
+customDendrogram(linkage(squareform(plotMatrix)),findInvPermInds(dendPerm)+0.15,gca,{'Linewidth',2,'color',[plotColors(3,:) 0.7]})
+plotMatrix = squeeze(pcaDiverRotStr(exampleNeurSess,allBehvAlignPerms(exampleNeurSess,:),allBehvAlignPerms(exampleNeurSess,:),1));
+customDendrogram(linkage(squareform(plotMatrix)),findInvPermInds(dendPerm)+0.15,gca,{'Linewidth',2,'color',[plotColors(4,:) 0.7]})
+
+
+set(gca,'TickDir','out')
+set(gca,'LineWidth',2)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+set(gca,'FontSize',14)
+ylabel('Divergence')
+set(gca,'XTickLabel',behvRegionLabels(dendPerm))
+set(gca,'XTickLabelRotation',30)
+set(gca,'TickDir','out')
+ylim([0 0.6])
+axH = gca;
+
+% make summary plots
+plotJitter = [-0.3 0 0.3];
+figure;
+barScatterPlot({ctxSpread;strSpread},'none',[1; 1],repmat({plotJitter},2,1),[],true);
+hold on
+
+% also plot controls
+nShifts = size(strSpreadShuff,2);
+for iAnimal = 1:length(sessionNames)
+
+    controlJitter = randn(1,nShifts)/100;
+    
+    % plot shuffle controls
+    % first do cortex
+    plotH = scatter(controlJitter+plotJitter(iAnimal)+1-0.05,ctxSpreadShuff(iAnimal,:),10,plotColors(3,:),'filled');
+    alpha(plotH,0.2)
+    % then striatum
+    plotH = scatter(controlJitter+plotJitter(iAnimal)+3-0.05,strSpreadShuff(iAnimal,:),10,plotColors(3,:),'filled');
+    alpha(plotH,0.2)
+
+    % plot rotation controls
+    % first do cortex
+    plotH = scatter(controlJitter+plotJitter(iAnimal)+1+0.05,ctxSpreadRot(iAnimal,:),10,plotColors(4,:),'filled');
+    alpha(plotH,0.2)
+    % then striatum
+    plotH = scatter(controlJitter+plotJitter(iAnimal)+3+0.05,strSpreadRot(iAnimal,:),10,plotColors(4,:),'filled');
+    alpha(plotH,0.2)
+
+end
+
+xlim([0 4])
+set(gca,'XTickLabel',{'Cortex','Striatum'})
+ylabel('Hierarchy spread (s.d.)')
+
+
+controlPlotColors = lines(3);
+for iSess = 1:length(sessionNames)
+
+    %first plot spread
+    figure(spreadFigH);
+    plot(plotXVals(iSess,:),[ctxSpread(iSess) strSpread(iSess)],'o-','MarkerSize',5,'Color',[0.3 0.3 0.3],'MarkerFaceColor',[0.3 0.3 0.3])
+    
+    %plot controls
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxSpreadRot,2))+0.005,ctxSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strSpreadRot,2))+0.005,strSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgSpreadRot,2)),emgSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+%     alpha(plotH,0.2)
+
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxSpreadShuff,2))-0.005,ctxSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strSpreadShuff,2))-0.005,strSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgSpreadShuff,2)),emgSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+%     alpha(plotH,0.2)
+
+    % add legend
+    legendH = legend('Random Rotation Control','Label Shuffle Control','Box','off','FontSize',11);
+    for iLabel = 1:length(legendH.String)
+        legendH.String{iLabel} = ['\color[rgb]{' num2str(controlPlotColors(iLabel,:)) '} ' legendH.String{iLabel}];
+    end
+
+
+    %next plot means
+    figure(meanFigH);
+    plot(plotXVals(iSess,:),[ctxMean(iSess) strMean(iSess)],'o-','MarkerSize',5,'Color',[0.3 0.3 0.3],'MarkerFaceColor',[0.3 0.3 0.3])
+    
+    %plot controls
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxMeanRot,2))+0.005,ctxMeanRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strMeanRot,2))+0.005,strMeanRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgMeanRot,2)),emgMeanRot(iSess,:),10,controlPlotColors(1,:),'filled');
+%     alpha(plotH,0.2)
+
+    plotH = scatter(repmat(plotXVals(iSess,1),1,size(ctxMeanShuff,2))-0.005,ctxMeanShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXVals(iSess,2),1,size(strMeanShuff,2))-0.005,strMeanShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+    alpha(plotH,0.2)
+%     plotH = scatter(repmat(plotXVals(iSess,3),1,size(emgMeanShuff,2)),emgMeanShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+%     alpha(plotH,0.2)
+
+    % add legend
+    legendH = legend('Random Rotation Control','Label Shuffle Control','Box','off','FontSize',11);
+    for iLabel = 1:length(legendH.String)
+        legendH.String{iLabel} = ['\color[rgb]{' num2str(controlPlotColors(iLabel,:)) '} ' legendH.String{iLabel}];
+    end
+
+end
+
+
+% make pretty
+figure(spreadFigH)
+set(gcf,'Color','w')
+set(gca,'TickDir','out')
+set(gca,'LineWidth',2)
+set(gca,'FontSize',14)
+ylabel('Std dev. of subspace divergence')
+set(gca,'XTick',1:2)
+set(gca,'XTickLabel',{'Cortex','Striatum'})
+ylim([0 0.2])
+xlim([0.5 2.5])
+
+% make pretty
+figure(meanFigH)
+set(gcf,'Color','w')
+set(gca,'TickDir','out')
+set(gca,'LineWidth',2)
+set(gca,'FontSize',14)
+ylabel('Mean. of subspace divergence')
+set(gca,'XTick',1:2)
+set(gca,'XTickLabel',{'Cortex','Striatum'})
+ylim([0 0.5])
+xlim([0.5 2.5])
+
+
+
+% plot EMG Spread separately
+emgFigH = figure;
+%plot spread and controls
+plot(plotXOffsets, emgSpread,'o','MarkerSize',5,'Color',[0.3 0.3 0.3],'MarkerFaceColor',[0.3 0.3 0.3])
+hold on
+for iSess = 1:length(sessionNames)
+    plotH = scatter(repmat(plotXOffsets(iSess),1,size(emgSpreadRot,2))+0.005,emgSpreadRot(iSess,:),10,controlPlotColors(1,:),'filled');
+    alpha(plotH,0.2)
+    plotH = scatter(repmat(plotXOffsets(iSess),1,size(emgSpreadRot,2))+0.005,emgSpreadShuff(iSess,:),10,controlPlotColors(2,:),'filled');
+end
+
+% add legend
+legendH = legend('Random Rotation Control','Label Shuffle Control','Box','off','FontSize',11);
+for iLabel = 1:length(legendH.String)
+    legendH.String{iLabel} = ['\color[rgb]{' num2str(controlPlotColors(iLabel,:)) '} ' legendH.String{iLabel}];
+end
+
+% make pretty
+
+figure(spreadFigH);
+set(gca,'XTick',[1 2])
+set(gca,'XTickLabel',{'Cortex','Striatum'})
+ylabel('Std dev of divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+xlim([0.5 2.5])
+
+figure(meanFigH);
+set(gca,'XTick',[1 2])
+set(gca,'XTickLabel',{'Cortex','Striatum'})
+ylabel('Mean of divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+xlim([0.5 2.5])
+
+figure(emgFigH);
+box off
+set(gca,'XTick',[0])
+set(gca,'XTickLabel',{'EMG'})
+ylabel('Std dev of divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.4)
+set(gcf,'Color','w')
+xlim([-1 1])
+
+% plot EMG hiearchy 
+figure('Units','normalized','OuterPosition',[0.1 0.1 0.445 0.7])
+tiledlayout(1,2,'Padding','compact','TileSpacing','compact')
+nexttile
+plotTitle = 'D026 EMG';
+imagesc(exampleEMG(behvAlignPerm,behvAlignPerm,1))
+set(gca,'XTick',1:length(behvRegionLabels))
+set(gca,'YTick',1:length(behvRegionLabels))
+set(gca,'XTickLabelRotation',30)
+set(gca,'XTickLabel',behvRegionLabels)
+set(gca,'YTickLabel',behvRegionLabels)
+set(gcf,'Color','w')
+set(gca,'LineWidth',1.5)
+set(gca,'FontSize',13)
+set(gca,'TickLength',[0 0])
+cH = colorbar;
+% caxis([0 0.55])
+cH.Label.String = 'Subspace Alignment';
+title(plotTitle)
+
+% plot dendrograms
+nexttile
+plotMatrix = exampleEMG(behvAlignPerm,behvAlignPerm,1);
+plotMatrix(logical(diag(ones(length(plotMatrix),1),0))) = 0;
+[~, dendPerm] = customDendrogram(linkage(squareform(plotMatrix)),[],gca,{'Linewidth',2,'Color','k'});
+% plotMatrix = exampleEMGShuff(behvAlignPerm,behvAlignPerm,1);
+% plotMatrix(logical(diag(ones(length(plotMatrix),1),0))) = 0;
+% customDendrogram(linkage(squareform(plotMatrix)),findInvPermInds(dendPerm)+0.15,gca,{'Linewidth',2,'color',[lines(1) 0.3]})
+
+set(gca,'TickDir','out')
+set(gca,'LineWidth',2)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+set(gca,'FontSize',14)
+ylabel('Subspace Divergence')
+set(gca,'XTickLabel',behvRegionLabels(dendPerm))
+set(gca,'XTickLabelRotation',30)
+set(gca,'TickDir','out')
+ylim([0 0.45])
+axH = gca;
+
+
+% plot UMAP and high-D EMG Freq hiearchy 
+figure('Units','normalized','OuterPosition',[0.1 0.1 0.445 0.7])
+tiledlayout(2,2,'Padding','compact','TileSpacing','compact')
+nexttile
+plotTitle = 'D026 High-d EMG Distances';
+imagesc(squeeze(freqDists(exampleEMGSess,:,:)))
+set(gca,'XTick',1:length(behvRegionLabels))
+set(gca,'YTick',1:length(behvRegionLabels))
+set(gca,'XTickLabelRotation',30)
+set(gca,'XTickLabel',behvRegionLabels)
+set(gca,'YTickLabel',behvRegionLabels)
+set(gcf,'Color','w')
+set(gca,'LineWidth',1.5)
+set(gca,'FontSize',13)
+set(gca,'TickLength',[0 0])
+cH = colorbar;
+% caxis([0 0.55])
+cH.Label.String = 'Subspace Alignment';
+title(plotTitle)
+
+% plot dendrograms
+nexttile
+plotMatrix = squeeze(freqDists(exampleEMGSess,:,:));
+plotMatrix(logical(diag(ones(length(plotMatrix),1),0))) = 0;
+[~, dendPerm] = customDendrogram(linkage(squareform(plotMatrix)),[],gca,{'Linewidth',2,'Color','k'});
+% plotMatrix = exampleEMGShuff(behvAlignPerm,behvAlignPerm,1);
+% plotMatrix(logical(diag(ones(length(plotMatrix),1),0))) = 0;
+% customDendrogram(linkage(squareform(plotMatrix)),findInvPermInds(dendPerm)+0.15,gca,{'Linewidth',2,'color',[lines(1) 0.3]})
+
+set(gca,'TickDir','out')
+set(gca,'LineWidth',2)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+set(gca,'FontSize',14)
+ylabel('Subspace Divergence')
+set(gca,'XTickLabel',behvRegionLabels(dendPerm))
+set(gca,'XTickLabelRotation',30)
+set(gca,'TickDir','out')
+ylim([0 50])
+axH = gca;
+
+% UMAP Dists
+nexttile
+plotTitle = 'D026 UMAP Distances';
+imagesc(squeeze(umapDists(exampleEMGSess,:,:)))
+set(gca,'XTick',1:length(behvRegionLabels))
+set(gca,'YTick',1:length(behvRegionLabels))
+set(gca,'XTickLabelRotation',30)
+set(gca,'XTickLabel',behvRegionLabels)
+set(gca,'YTickLabel',behvRegionLabels)
+set(gcf,'Color','w')
+set(gca,'LineWidth',1.5)
+set(gca,'FontSize',13)
+set(gca,'TickLength',[0 0])
+cH = colorbar;
+% caxis([0 0.55])
+cH.Label.String = 'Subspace Alignment';
+title(plotTitle)
+
+% plot dendrograms
+nexttile
+plotMatrix = squeeze(umapDists(exampleEMGSess,:,:));
+plotMatrix(logical(diag(ones(length(plotMatrix),1),0))) = 0;
+[~, dendPerm] = customDendrogram(linkage(squareform(plotMatrix)),[],gca,{'Linewidth',2,'Color','k'});
+% plotMatrix = exampleEMGShuff(behvAlignPerm,behvAlignPerm,1);
+% plotMatrix(logical(diag(ones(length(plotMatrix),1),0))) = 0;
+% customDendrogram(linkage(squareform(plotMatrix)),findInvPermInds(dendPerm)+0.15,gca,{'Linewidth',2,'color',[lines(1) 0.3]})
+
+set(gca,'TickDir','out')
+set(gca,'LineWidth',2)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+set(gca,'FontSize',14)
+ylabel('Subspace Divergence')
+set(gca,'XTickLabel',behvRegionLabels(dendPerm))
+set(gca,'XTickLabelRotation',30)
+set(gca,'TickDir','out')
+ylim([0 5])
+axH = gca;
+
+
+
+% plot EMG correlations
+figure('Units','normalized','OuterPosition',[0.1 0.1 0.445 0.7])
+tiledlayout(1,3,'Padding','compact','TileSpacing','compact')
+
+allEMGs = [allSessAlignmentsEmg{:}];
+allStrs = [allSessAlignmentsStr{:}];
+allCtxs = [allSessAlignmentsCtx{:}];
+
+corrType = 'Spearman';
+
+% plot emg vs cortex
+nexttile
+scatter(allEMGs,allCtxs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allEMGs,allCtxs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.03,0.41,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.05,0.38,['CC = ' num2str(corr(allEMGs',allCtxs','type',corrType))],'fontSize',14)
+xlabel('EMG Divergence')
+ylabel('Cortex Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+xlim([0 0.8])
+
+% plot emg vs striatum
+nexttile
+scatter(allEMGs,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allEMGs,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.03,0.8,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.05,0.7,['CC = ' num2str(corr(allEMGs',allStrs','type',corrType))],'fontSize',14)
+xlabel('EMG Divergence')
+ylabel('Striatum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+xlim([0 0.8])
+
+% plot cortex vs striatum
+nexttile
+scatter(allCtxs,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allCtxs,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.03,0.8,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.03,0.7,['CC = ' num2str(corr(allCtxs',allStrs','type',corrType))],'fontSize',14)
+xlabel('Cortex Divergence')
+ylabel('Striatum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+set(gcf,'Color','w')
+
+
+
+% next use emg from umap or high-d distances
+figure('Units','normalized','OuterPosition',[0.1 0.1 0.445 0.7])
+tiledlayout(2,4,'Padding','compact','TileSpacing','compact')
+
+allUmaps = [allSessAlignmentsUmap{:}];
+allTsnes = [allSessAlignmentsTsne{:}];
+allFreqs = [allSessAlignmentsFreq{:}];
+allTimeEmgs = [allSessAlignmentsTimeEmg{:}];
+allPcaEmgs = [allSessAlignmentsPcaEmg{:}];
+
+
+% plot high-D freq vs cortex
+nexttile(1)
+scatter(allFreqs,allCtxs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allFreqs,allCtxs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.49,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.45,['CC = ' num2str(corr(allFreqs',allCtxs','type',corrType))],'fontSize',14)
+xlabel('High-D EMG Freq Distance')
+ylabel('Cortex Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+% plot freq vs str
+nexttile(5)
+scatter(allFreqs,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allFreqs,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.8,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.7,['CC = ' num2str(corr(allFreqs',allStrs','type',corrType))],'fontSize',14)
+xlabel('High-D EMG Freq Distance')
+ylabel('Striatum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+
+% plot umap dist vs cortex
+nexttile(2)
+scatter(allTsnes,allCtxs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allTsnes,allCtxs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.49,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.45,['CC = ' num2str(corr(allTsnes',allCtxs','type',corrType))],'fontSize',14)
+xlabel('UMAP Distance')
+ylabel('Cortex Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+% plot umap dist vs str
+nexttile(6)
+scatter(allTsnes,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allTsnes,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.8,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.7,['CC = ' num2str(corr(allTsnes',allStrs','type',corrType))],'fontSize',14)
+xlabel('UMAP Distance')
+ylabel('Striatum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+
+% plot straight up time domain EMG vs cortex
+nexttile(3)
+scatter(allTimeEmgs,allCtxs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allTimeEmgs,allCtxs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.49,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.45,['CC = ' num2str(corr(allTimeEmgs',allCtxs','type',corrType))],'fontSize',14)
+xlabel('Time domain EMG Distance')
+ylabel('Cortex Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+% plot straight up time domain EMG vs str
+nexttile(7)
+scatter(allTimeEmgs,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allTimeEmgs,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.8,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.7,['CC = ' num2str(corr(allTimeEmgs',allStrs','type',corrType))],'fontSize',14)
+xlabel('Time domain EMG Distance')
+ylabel('Striatum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+
+% plot PCA projected emg frequency vs cortex
+nexttile(4)
+scatter(allPcaEmgs,allCtxs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allPcaEmgs,allCtxs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.49,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.45,['CC = ' num2str(corr(allPcaEmgs',allCtxs','type',corrType))],'fontSize',14)
+xlabel('Frequency PCA Distance')
+ylabel('Cortex Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+
+% plot PCA projected emg frequency vs str
+nexttile(8)
+scatter(allPcaEmgs,allStrs,15,[0.3 0.3 0.3],'filled')
+linReg = fitlm(allPcaEmgs,allStrs);
+hold on
+plot(get(gca,'XLim'),get(gca,'XLim')*linReg.Coefficients.Estimate(2)+linReg.Coefficients.Estimate(1),'Color',lines(1),'LineWidth',2,'LineStyle','--')
+text(0.1,0.8,['R^2 = ' num2str(linReg.Rsquared.Ordinary)],'fontSize',14)
+text(0.1,0.7,['CC = ' num2str(corr(allPcaEmgs',allStrs','type',corrType))],'fontSize',14)
+xlabel('Frequency PCA Distance')
+ylabel('Striatum Divergence')
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'LineWidth',1.5)
+set(gca,'XColor',[0 0 0])
+set(gca,'YColor',[0 0 0])
+
+set(gcf,'color','w')
+
+
+
+% 

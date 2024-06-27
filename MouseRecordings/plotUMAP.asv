@@ -1,0 +1,86 @@
+function plotUMAP(umapFile)
+
+load(umapFile,'reduction','behvLabelsNoArt','analyzedBehaviors','watershedRegions','gridXInds','gridYInds')
+
+nUMAPDims = size(reduction,2);
+
+
+legendNames = {'Climb Up', 'Climb Down', 'Eating', 'Grooming', 'Jump down', 'Jump Across', 'Rearing', 'Still', 'Walk Flat', 'Walk Grid'};
+
+% behvPlotOrder = [2 1 4 3 9 11 10 8 6 5]; %D026
+% behvColorOrder = [1 2 4 3 5 6 7 8 9 10];
+% behvPlotOrder = [1 2 4 3 8 7 6 10 9 5]; %D020, D040 & D036
+% behvColorOrder = [2 1 4 3 5 8 9 6 7 10];
+behvPlotOrder = [1 2 4 3 8 7 6 10 9 5]; %D041
+behvColorOrder = [2 1 4 3 5 8 9 6 7 10];
+
+% plot
+figure;
+hold on;
+colormap = turbo(length(behvPlotOrder));
+colormap(9,:) = colormap(9,:)*1.2;
+colormap(colormap>1) = 1;
+colormap(colormap<0) = 0;
+
+backgroundMarkerSize = 0.5;
+behvMarkerSize = 0.01;
+
+% if nUMAPDims == 3
+%     plotH(length(behaviors)) = plot3(reduction(behvLabelsNoArt==0,1),reduction(behvLabelsNoArt==0,2),reduction(behvLabelsNoArt==0,3),...
+%         '.','color','k','MarkerSize',backgroundMarkerSize);
+% else
+%     plotH(length(analyzedBehaviors)) = plot(reduction(behvLabelsNoArt==0,1),reduction(behvLabelsNoArt==0,2),'.','color','k','MarkerSize',backgroundMarkerSize);
+% end
+
+for iBehv = 1:length(behvPlotOrder)
+
+    behvInd = behvPlotOrder(iBehv);
+
+    if nUMAPDims == 3
+        plotH(iBehv) = plot3(reduction(behvLabelsNoArt==behvInd,1),reduction(behvLabelsNoArt==behvInd,2),reduction(behvLabelsNoArt==behvInd,3), ...
+            '.','color',colormap(behvInd,:),'MarkerSize',behvMarkerSize);
+    else
+        plotH(iBehv) = plot(reduction(behvLabelsNoArt==behvInd,1),reduction(behvLabelsNoArt==behvInd,2),'.','color',colormap(behvColorOrder(iBehv),:),'MarkerSize',behvMarkerSize);
+    end
+end
+
+% legendNames = [analyzedBehaviors; {'background'}];
+% legendH = legend(plotH,legendNames(behvPlotOrder),'Box','off','FontSize',14);
+% for iLabel = 1:length(legendH.String)
+%     legendH.String{iLabel} = ['\color[rgb]{' num2str(plotH(iLabel).Color) '} ' legendH.String{iLabel}];
+% end
+
+% additionally plot the watershed boundaries
+% to do so, first get density
+pointsToUse = reduction;
+pointsToUse(behvLabelsNoArt == 0,:) = [];
+densityGaussStd = 0.2;
+nGridPoints = length(gridXInds);
+reducLimsX1 = min(min(reduction(:,1)))*1.5-2;
+reducLimsX2 = max(max(reduction(:,1)))*1.5+2;
+reducLimsY1 = min(min(reduction(:,2)))*1.5-2;
+reducLimsY2 = max(max(reduction(:,2)))*1.5+2;
+[gridXInds,gridYInds, density] = findPointDensity(pointsToUse,densityGaussStd,nGridPoints,[reducLimsX1 reducLimsX2 reducLimsY1 reducLimsY2]);
+% imH = imagesc(gridXInds,gridYInds,density);
+alphaData = logisticTransparency(density,0.0006,0.0001);
+
+[boundaryYs,boundaryXs] = find(watershedRegions==0);
+
+inRegionInds = [];
+for iPoint = 1:length(boundaryXs)
+    if alphaData(boundaryYs(iPoint),boundaryXs(iPoint))>0.5
+        inRegionInds = [inRegionInds iPoint];
+    end
+end
+
+plot(gridXInds(boundaryXs(inRegionInds)),gridYInds(boundaryYs(inRegionInds)),'k.','MarkerSize',3)
+
+set(gca,'ydir','normal')
+% ylim([-8 6])
+% xlim([-4 12])
+
+axis off
+set(gcf,'Color','w')
+set(gca,'LineWidth',1.5)
+set(gca,'FontSize',12)
+set(gca,'TickDir','out')
