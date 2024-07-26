@@ -28,6 +28,12 @@ function metrics=calcPerformanceMetrics(estimates, actuals, varargin)
 %               it just won't calculate the metrics and return NaN for the
 %               metrics. Default true.
 % 
+% outlierLvl -  If this is not empty, then the calculation will remove
+%               time points in the estimates that may be outliers (it'll
+%               remove anything above the Xth percentile, where X is the
+%               value inputted in outlierLvl) before calculating the
+%               perforance metrics. Default no removal
+% 
 % Outputs:
 % metrics -     A struct containing all the calulated metrics. Currently
 %               contains the following fields:
@@ -46,10 +52,11 @@ function metrics=calcPerformanceMetrics(estimates, actuals, varargin)
 %               estimate variance over the real variance:
 %               var(estimate)/var(actual)
 % 
-% David Xing, last updated 10/17/2018
+% David Xing, last updated 7/26/2024
 
 % 10/17/2018 - Added VAF output
 % 
+% 7/26/2024 - Added outlier removal option
 
 % parse inputs, set defaults
 narginchk(2,4);
@@ -63,6 +70,7 @@ if nargin>2
 else
     dim = 2;
 end
+
 % whether or not to ignore nans
 if nargin>3
     if(isempty(varargin{2}))
@@ -72,6 +80,20 @@ if nargin>3
     end
 else
     ignoreNaN=true;
+end
+
+% ourlier removal
+if nargin>4
+    if(isempty(varargin{2}))
+        removeOutliers = false;
+        outlierLvl = 100;
+    else
+        removeOutliers = true;
+        outlierLvl= varargin{2};
+    end
+else
+    removeOutliers = false;
+    outlierLvl = 100;
 end
 
 % cell to hold all the outputs since it's easier to iterate across, will convert to struct later
@@ -131,6 +153,14 @@ for iCell=1:length(estimates)
                  metricsCell{iMetric}{iCell}(iTrial)=NaN;
              end
              continue;
+         end
+
+         %remove outliers if desired
+         if removeOutliers
+             outlierThresh = prctile(abs(trialEst),outlierLvl);
+             outlierInds = find(abs(trialEst) >= outlierThresh);
+             trialEst(outlierInds) = [];
+             trialReal(outlierInds) = [];
          end
          
          %R2:
