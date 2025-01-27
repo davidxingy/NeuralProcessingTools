@@ -93,7 +93,7 @@ for iROI=1:nRegions
 end
 
 %draw frame
-imshow(firstFrameRects,[min(min(firstFrameRects)), max(max(firstFrameRects))]);
+imshow(firstFrameRects,[min(min(min(firstFrameRects))), min(max(max(firstFrameRects)))]);
 
 %display numbers
 for iROI=1:nRegions
@@ -147,7 +147,7 @@ while true
         intensities.std(iFrame,iRegion)=std(ROI(:));
     end
     
-    disp(iFrame)
+%     disp(iFrame)
     iFrame = iFrame+1;
 end
 
@@ -201,8 +201,8 @@ else
 end
 
 % Now threshold for all intensities
-% ledStatus = intensities > repmat(thresholds,nFrames,1);
-% usedThreshs = thresholds;
+ledStatus = intensities.mean > repmat(thresholds,nFrames,1);
+usedThreshs = thresholds;
 
 % Finally, write output video file if user requested
 if (saveOutputVideo)
@@ -253,13 +253,13 @@ function outFrame=GetFrameColorChannel(inFrame,channel)
 
 switch channel
     case 'red'
-        outFrame=squeeze(inFrame(:,:,1));
+        outFrame=double(squeeze(inFrame(:,:,1)));
     case 'blue'
-        outFrame=squeeze(inFrame(:,:,3));
+        outFrame=double(squeeze(inFrame(:,:,3)));
     case 'green'
-        outFrame=squeeze(inFrame(:,:,2));
+        outFrame=double(squeeze(inFrame(:,:,2)));
     case {'gray', 'grey'}
-        outFrame=rgb2gray(inFrame);
+        outFrame=double(rgb2gray(inFrame));
 end
 
 
