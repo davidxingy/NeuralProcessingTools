@@ -1,5 +1,5 @@
 % function allChansFiltData = optoUMAPOverlay(baseDir)
-clearvars -except D040Sessions
+% clearvars -except D040Sessions
 % baseDir = 'X:\David\ArenaRecordings\D040-110223-ArenaRecording';
 
 D036Sessions = {'X:\David\ArenaRecordings\D036-101623-ArenaRecording','X:\David\ArenaRecordings\D036-101723-ArenaRecording',...
@@ -14,9 +14,9 @@ D041Sessions = {'X:\David\ArenaRecordings\D041-121123-ArenaRecording','X:\David\
     'X:\David\ArenaRecordings\D041-121323-ArenaRecording','X:\David\ArenaRecordings\D041-121423-ArenaRecording',...
     'X:\David\ArenaRecordings\D041-121523-ArenaRecording'};
 
-baseDirs = D041Sessions;
-nShuffs = 1000;
-
+baseDirs = D040Sessions;
+nShuffs = 100;
+runUMAP = true;
 if runUMAP
 
     for iSession = 1:length(baseDirs)
@@ -106,7 +106,7 @@ if runUMAP
             thisControl2Ind = downsampleControl2OnsetInds(usedPulses(iPulse));
             sessionControl2Emgs{iSession}(iPulse,:,:) = downsampEMG(:,thisControl2Ind-80:thisControl2Ind+90);
 
-            if iSession == 1 || iSession == length(baseDirs)
+            if iSession == 1 %|| iSession == length(baseDirs)
                 sessionLaserBehvs{iSession}(iPulse,:) = behvLabels(thisLaserInd-80:thisLaserInd+90);
                 sessionControl1Behvs{iSession}(iPulse,:) = behvLabels(thisControl1Ind-80:thisControl1Ind+90);
                 sessionControl2Behvs{iSession}(iPulse,:) = behvLabels(thisControl2Ind-80:thisControl2Ind+90);
@@ -192,8 +192,8 @@ for iBehv = 1:10
 
     for iWindow = 1:size(laserReductions,1)
 
-        plot(squeeze(laserReductions(1,iWindow,allLaserFeatureBehvs(:,iWindow)==iBehv)),...
-            squeeze(laserReductions(2,iWindow,allLaserFeatureBehvs(:,iWindow)==iBehv)),'.','Color',plotColors(iBehv,:),'MarkerSize',0.1)
+        tmpH = plot(squeeze(laserReductions(1,iWindow,allLaserFeatureBehvs(:,iWindow)==iBehv)),...
+            squeeze(laserReductions(2,iWindow,allLaserFeatureBehvs(:,iWindow)==iBehv)),'.','Color',plotColors(iBehv,:),'MarkerSize',0.1);
 
         plot(squeeze(control1Reductions(1,iWindow,allLaserFeatureBehvs(:,iWindow)==iBehv)),...
             squeeze(control1Reductions(2,iWindow,allLaserFeatureBehvs(:,iWindow)==iBehv)),'.','Color',plotColors(iBehv,:),'MarkerSize',0.1)
@@ -203,7 +203,31 @@ for iBehv = 1:10
 
 
     end
+    
+    plotH(iBehv) = tmpH;
 end
+
+legH = legend(plotH,analyzedBehaviors);
+legH.Box = "off";
+legH.FontSize = 12;
+for iLabel = 1:length(legH.String)
+legH.String{iLabel} = ['\color[rgb]{' num2str(plotH(iLabel).Color) '} ' legH.String{iLabel}];
+end
+
+
+
+% z-score EMGs for calculating effect sizes
+flattenedLaserEmgs = permute(allLaserEMGs,[2 3 1]);
+flattenedLaserEmgs = flattenedLaserEmgs(:,:);
+emgMeans = mean(flattenedLaserEmgs,2);
+emgStds = std(flattenedLaserEmgs,[],2);
+
+allLaserEMGs = (allLaserEMGs - repmat(emgMeans',size(allLaserEMGs,1),1,size(allLaserEMGs,3)))./...
+    repmat(emgStds',size(allLaserEMGs,1),1,size(allLaserEMGs,3));
+allControl1EMGs = (allControl1EMGs - repmat(emgMeans',size(allControl1EMGs,1),1,size(allControl1EMGs,3)))./...
+    repmat(emgStds',size(allControl1EMGs,1),1,size(allControl1EMGs,3));
+allControl2EMGs = (allControl2EMGs - repmat(emgMeans',size(allControl2EMGs,1),1,size(allControl2EMGs,3)))./...
+    repmat(emgStds',size(allControl2EMGs,1),1,size(allControl2EMGs,3));
 
 % make grid points
 nXGridPoints = 100;
@@ -214,130 +238,210 @@ UMAPextents = [max(reduction(:,1)) min(reduction(:,1)) max(reduction(:,2)) min(r
 xGridPoints = linspace(UMAPextents(2)*1.05,UMAPextents(1)*1.05,nXGridPoints);
 yGridPoints = linspace(UMAPextents(4)*1.05,UMAPextents(3)*1.05,nXGridPoints);
 
-for iGridX = 1:nXGridPoints
-    for iGridY = 1:nYGridPoints
+% make control shuffs for null
+combControlReductions = cat(3,control1Reductions,control2Reductions);
+combControlEMGs = cat(1,allControl1EMGs,allControl2EMGs);
+for iShuff = 1:nShuffs
+    
+    null1Inds(iShuff,:) = randperm(size(combControlReductions,3),size(combControlReductions,3)/2);
+    null2Inds(iShuff,:) = setdiff(1:size(combControlReductions,3),null1Inds(iShuff,:));
+    
+end
 
-        tic
 
-        %calculate the distance between the grid point and each of the
-        %laser and control points
-
-        %first just use UMAP location at 10ms
-        laserDistsInst = squeeze(sqrt((laserReductions(1,5,:) - xGridPoints(iGridX)).^2 + ...
-            (laserReductions(1,5,:) - yGridPoints(iGridY)).^2));
-        controlDistsInst = squeeze(sqrt((control1Reductions(1,5,:) - xGridPoints(iGridX)).^2 + ...
-            (control1Reductions(1,5,:) - yGridPoints(iGridY)).^2));
-
-        for iShuff = 1:nShuffs
-            shuffDistsInst(iShuff,:) = sqrt((allShuffReducs(iShuff,:,end,1) - xGridPoints(iGridX)).^2 + ...
-                (allShuffReducs(iShuff,:,end,2) - yGridPoints(iGridY)).^2);
+% quest version, get all the weights first, then export and let quest do
+% the weighted averaging which takes the most time. Then import back in and
+% calculate effect sizes (fast)
+if useQuest
+    save('gridCalcVars','laserReductions','control1Reductions','combControlReductions','xGridPoints','yGridPoints',...
+        'nShuffs','null1Inds','null2Inds','allLaserEMGs','allControl1EMGs','combControlEMGs','UMAPextents');
+else
+    
+    for iGridX = 1:nXGridPoints
+        for iGridY = 1:nYGridPoints
+            
+            tic
+            
+            %calculate the distance between the grid point and each of the
+            %laser and control points
+            
+            %first just use UMAP location at 10ms
+            laserDists = squeeze(sqrt((laserReductions(1,5,:) - xGridPoints(iGridX)).^2 + ...
+                (laserReductions(2,5,:) - yGridPoints(iGridY)).^2));
+            controlDists = squeeze(sqrt((control1Reductions(1,5,:) - xGridPoints(iGridX)).^2 + ...
+                (control1Reductions(2,5,:) - yGridPoints(iGridY)).^2));
+            
+            for iShuff = 1:nShuffs
+                null1Dists(iShuff,:) = sqrt((combControlReductions(1,5,null1Inds(iShuff,:)) - xGridPoints(iGridX)).^2 + ...
+                    (combControlReductions(2,5,null1Inds(iShuff,:)) - yGridPoints(iGridY)).^2);
+                null2Dists(iShuff,:) = sqrt((combControlReductions(1,5,null2Inds(iShuff,:)) - xGridPoints(iGridX)).^2 + ...
+                    (combControlReductions(2,5,null2Inds(iShuff,:)) - yGridPoints(iGridY)).^2);
+            end
+            
+            %change distance to a weight, using gaussian
+            gaussKernal = mean([UMAPextents(1)-UMAPextents(2),UMAPextents(3)-UMAPextents(4)])/10;
+            laserWeights = exp(laserDists.^2/(-2*gaussKernal^2));
+            controlWeights = exp(controlDists.^2/(-2*gaussKernal^2));
+            
+            null1Weights = exp(null1Dists.^2/(-2*gaussKernal^2));
+            null2Weights = exp(null2Dists.^2/(-2*gaussKernal^2));
+            
+            %save sum of weights
+            laserWeightsSum(iGridX,iGridY) = sum(laserWeights);
+            controlWeightsSum(iGridX,iGridY) = sum(controlWeights);
+            null1WeightsSum(iGridX,iGridY,:) = sum(null1Weights,2);
+            null2WeightsSum(iGridX,iGridY,:) = sum(null2Weights,2);
+            
+            % now get weighted average EMG time series
+            laserEMG(iGridX,iGridY,:,:) = squeeze(pagemtimes(laserWeights'/sum(laserWeights),allLaserEMGs));
+            controlEMG(iGridX,iGridY,:,:) = squeeze(pagemtimes(controlWeights'/sum(controlWeights),allControl1EMGs));
+            
+            for iShuff = 1:nShuffs
+                
+                thisNull1EMG = squeeze(pagemtimes(null1Weights(iShuff,:)/sum(null1Weights(iShuff,:)), ...
+                    squeeze(combControlEMGs(null1Inds(iShuff,:),:,:))));
+                
+                thisNull2EMG = squeeze(pagemtimes(null2Weights(iShuff,:)/sum(null2Weights(iShuff,:)), ...
+                    squeeze(combControlEMGs(null2Inds(iShuff,:),:,:))));
+                
+                %just save the first shuffle since don't want to take up too
+                %much memory
+                if iShuff==1
+                    null1EMG(iGridX,iGridY,:,:) = thisNull1EMG;
+                    null2EMG(iGridX,iGridY,:,:) = thisNull2EMG;
+                end
+                
+            end
+            
+            disp(['X Grid point ' num2str(iGridX) ', Y Grid Point ' num2str(iGridY) ', ' num2str(toc) 's'])
+            
         end
+    end
+    
+end
 
-        %change distance to a weight, using gaussian
-        gaussKernal = mean([UMAPextents(1)-UMAPextents(2),UMAPextents(3)-UMAPextents(4)])/20;
-        laserWeightsInst = exp(laserDistsInst.^2/(-2*gaussKernal^2));
-        controlWeightsInst = exp(controlDistsInst.^2/(-2*gaussKernal^2));
-        laserWeightsAve = exp(laserDistsAve.^2/(-2*gaussKernal^2));
-        controlWeightsAve = exp(controlDistsAve.^2/(-2*gaussKernal^2));
+% calculate slopes and effect sizes
+if useQuest
+    load('questOutputVars')
+end
 
-        shuffWeightsInst = exp(shuffDistsInst.^2/(-2*gaussKernal^2));
-        shuffWeightsAve= exp(shuffDistsAve.^2/(-2*gaussKernal^2));
+effectSizes = laserSlope - controlSlope;
+effectSizesLong = laserSlopeLong - controlSlopeLong;
 
-        %save sum of weights
-        laserWeightsSumInst(iGridX,iGridY) = sum(laserWeightsInst);
-        controlWeightsSumInst(iGridX,iGridY) = sum(controlWeightsInst);
-        shuffWeightsSumInst(iGridX,iGridY,:) = sum(shuffWeightsInst,2);
+for iShuff = 1:nShuffs
+    effectSizesShuff(iShuff,:,:,:) = squeeze(null2Slope(iShuff,:,:,:)) - squeeze(null1Slope(iShuff,:,:,:));
+    effectSizesLongShuff(iShuff,:,:,:) = squeeze(null2SlopeLong(iShuff,:,:,:)) - squeeze(null1SlopeLong(iShuff,:,:,:));
+end
 
-        laserWeightsSumAve(iGridX,iGridY) = sum(laserWeightsAve);
-        controlWeightsSumAve(iGridX,iGridY) = sum(controlWeightsAve);
-        shuffWeightsSumAve(iGridX,iGridY,:) = sum(shuffWeightsAve,2);
+% generate p-values
+for iGridX = 1:size(effectSizes,1)
+    for iGridY = 1:size(effectSizes,2)
+        for iMusc = 1:size(effectSizes,3)
+            
+            pVal(iGridX,iGridY,iMusc) = sum(abs(effectSizesShuff(:,iGridX,iGridY,iMusc)) > abs(effectSizes(iGridX,iGridY,iMusc)))/size(effectSizesShuff,1);
+            pValLong(iGridX,iGridY,iMusc) = sum(abs(effectSizesLongShuff(:,iGridX,iGridY,iMusc)) > abs(effectSizesLong(iGridX,iGridY,iMusc)))/size(effectSizesLongShuff,1);
 
-        % now get weighted average EMG time series
-        laserEMGInst(iGridX,iGridY,:,:) = squeeze(pagemtimes(laserWeightsInst'/sum(laserWeightsInst),allLaserEMGs));
-        controlEMGInst(iGridX,iGridY,:,:) = squeeze(pagemtimes(controlWeightsInst'/sum(controlWeightsInst),allControlEMGs));
-        laserEMGAve(iGridX,iGridY,:,:) = squeeze(pagemtimes(laserWeightsAve'/sum(laserWeightsAve),allLaserEMGs));
-        controlEMGAve(iGridX,iGridY,:,:) = squeeze(pagemtimes(controlWeightsAve'/sum(controlWeightsAve),allControlEMGs));
-
-        for iShuff = 1:nShuffs
-            shuffEMGInst(iShuff,iGridX,iGridY,:,:) = squeeze(pagemtimes(shuffWeightsInst(iShuff,:)/sum(shuffWeightsInst(iShuff,:)), ...
-                squeeze(allShuffEMGs(iShuff,:,:,:))));
-            shuffEMGAve(iShuff,iGridX,iGridY,:,:) = squeeze(pagemtimes(shuffWeightsAve(iShuff,:)/sum(shuffWeightsAve(iShuff,:)), ...
-                squeeze(allShuffEMGs(iShuff,:,:,:))));
         end
-
-        % get slopes
-        laserSlopeInst(iGridX,iGridY,:) = squeeze(mean(laserEMGInst(iGridX,iGridY,:,(22:41)),4) - ...
-            mean(laserEMGInst(iGridX,iGridY,:,(1:21)),4));
-        controlSlopeInst(iGridX,iGridY,:) = squeeze(mean(controlEMGInst(iGridX,iGridY,:,(22:41)),4) - ...
-            mean(controlEMGInst(iGridX,iGridY,:,(1:21)),4));
-
-        laserSlopeAve(iGridX,iGridY,:) = squeeze(mean(laserEMGAve(iGridX,iGridY,:,(22:41)),4) - ...
-            mean(laserEMGAve(iGridX,iGridY,:,(1:21)),4));
-        controlSlopeAve(iGridX,iGridY,:) = squeeze(mean(controlEMGAve(iGridX,iGridY,:,(22:41)),4) - ...
-            mean(controlEMGAve(iGridX,iGridY,:,(1:21)),4));
-
-        for iShuff = 1:nShuffs
-            shuffSlopeInst(iShuff,iGridX,iGridY,:) = squeeze(mean(shuffEMGInst(iShuff,iGridX,iGridY,:,(22:41)),5) - ...
-                mean(shuffEMGInst(iShuff,iGridX,iGridY,:,(1:21)),5));
-            shuffSlopeAve(iShuff,iGridX,iGridY,:) = squeeze(mean(shuffEMGAve(iShuff,iGridX,iGridY,:,(22:41)),5) - ...
-                mean(shuffEMGAve(iShuff,iGridX,iGridY,:,(1:21)),5));
-        end
-
-        disp(['X Grid point ' num2str(iGridX) ', Y Grid Point ' num2str(iGridY) ', ' num2str(toc) 's'])
-
     end
 end
 
-effectSizesAve = laserSlopeAve - controlSlopeAve;
-effectSizesInst = laserSlopeInst - controlSlopeInst;
+% save
+save('umapEffectSizes','effectSizes','laserSlope','controlSlope','effectSizesShuff','null1Slope','null2Slope',...
+    'laserEMG','controlEMG','null1EMG','null2EMG','laserWeightsSum','controlWeightsSum','null1WeightsSum',...
+    'null2WeightsSum','gaussKernal','null1Inds','null2Inds');
 
-for iShuff = 1:nShuffs
-    effectSizesShuffAve(iShuff,:,:,:) = squeeze(shuffSlopeAve(iShuff,:,:,:)) - controlSlopeAve;
-    effectSizesShuffInst(iShuff,:,:,:) = squeeze(shuffSlopeInst(iShuff,:,:,:)) - controlSlopeInst;
-end
-
-
-% get watershedding region splitting
-[regionBoundaryIndsY, regionBoundaryIndsX] = find(watershedRegions==0);
+% % get watershedding region splitting
+% [regionBoundaryIndsY, regionBoundaryIndsX] = find(watershedRegions==0);
 
 % make mask for grid points that have sufficient closeby points
-alphaMask = logisticTransparency(laserWeightsSumInst,100,10)';
+alphaMask = logisticTransparency(laserWeightsSum,1000,50)';
 
 % make some plots
+animalTitle = 'D040';
 figure
-tH = tiledlayout(2,4,'TileSpacing','compact','Padding','compact');
-title(tH,'-10 to 10 ms UMAP')
+tH = tiledlayout(4,4,'TileSpacing','compact','Padding','compact');
+title(tH,[animalTitle ', Fast Latency (10-30ms)'])
 
-for iMusc = 1:size(effectSizesAve,3)
+for iMusc = 1:size(effectSizes,3)
 
     nexttile
-    imagesc(xGridPoints,yGridPoints,effectSizesAve(:,:,iMusc)','AlphaData',alphaMask)
-    hold on
-    plot(UMAPGridXInds(regionBoundaryIndsX),UMAPGridYInds(regionBoundaryIndsY),'.k')
+    imagesc(xGridPoints,yGridPoints,effectSizes(:,:,iMusc)','AlphaData',alphaMask);
+%     hold on
+%     plot(UMAPGridXInds(regionBoundaryIndsX),UMAPGridYInds(regionBoundaryIndsY),'.k')
     set(gca,'YDir','normal')
     set(gcf,'color','w')
     title(channelNames{iMusc})
+    axis off
     colorbar
 
 end
-    
 
-figure
-tH = tiledlayout(2,4,'TileSpacing','compact','Padding','compact');
-title(tH,'1 ms UMAP')
-
-for iMusc = 1:size(effectSizesInst,3)
+for iMusc = 1:size(effectSizes,3)
 
     nexttile
-    imagesc(xGridPoints,yGridPoints,effectSizesInst(:,:,iMusc)','AlphaData',alphaMask)
-    hold on
-    plot(UMAPGridXInds(regionBoundaryIndsX),UMAPGridYInds(regionBoundaryIndsY),'.k')
+    imagesc(xGridPoints,yGridPoints,pVal(:,:,iMusc)','AlphaData',alphaMask);
+%     hold on
+%     plot(UMAPGridXInds(regionBoundaryIndsX),UMAPGridYInds(regionBoundaryIndsY),'.k')
+    set(gca,'YDir','normal')
+    set(gca,'CLim',[0 0.05])
+    set(gcf,'color','w')
+    title(channelNames{iMusc})
+    axis off
+    colorbar
+
+end
+
+% 
+figure
+tH = tiledlayout(4,4,'TileSpacing','compact','Padding','compact');
+title(tH,[animalTitle ', Long Latency (70-90ms)'])
+
+for iMusc = 1:size(effectSizes,3)
+
+    nexttile
+    imagesc(xGridPoints,yGridPoints,effectSizesLong(:,:,iMusc)','AlphaData',alphaMask);
+%     hold on
+%     plot(UMAPGridXInds(regionBoundaryIndsX),UMAPGridYInds(regionBoundaryIndsY),'.k')
     set(gca,'YDir','normal')
     set(gcf,'color','w')
     title(channelNames{iMusc})
+    axis off
     colorbar
 
 end
+
+for iMusc = 1:size(effectSizes,3)
+
+    nexttile
+    imagesc(xGridPoints,yGridPoints,pValLong(:,:,iMusc)','AlphaData',alphaMask);
+%     hold on
+%     plot(UMAPGridXInds(regionBoundaryIndsX),UMAPGridYInds(regionBoundaryIndsY),'.k')
+    set(gca,'YDir','normal')
+    set(gca,'CLim',[0 0.05])
+    set(gcf,'color','w')
+    title(channelNames{iMusc})
+    axis off
+    colorbar
+
+end
+
+
+% p-value histogram:
+figure('color','w');
+tiledlayout(2,1,'TileSpacing','compact','Padding','compact');
+nexttile
+histogram(pVal(:))
+box off
+xlabel('p-values')
+ylabel('# grid points')
+title([animalTitle ', short latency (10-30ms)'])
+
+nexttile
+histogram(pValLong(:))
+box off
+xlabel('p-values')
+ylabel('# grid points')
+title([animalTitle ', long latency (70-90ms)'])
 
 
 figure
