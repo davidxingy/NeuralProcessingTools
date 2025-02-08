@@ -9,10 +9,24 @@ channelNames = {'Right Biceps','Right Triceps', 'Right ECR', 'Right PL', 'Right 
 %     'ECR Ch1','ECR Ch2','ECR Ch3','ECR Ch4',...
 %     'PL Ch1','PL Ch2','PL Ch3','PL Ch4'};
 
-if nargin == 3
-    fileBreakSize = varargin{1};
+if nargin > 2
+    if isempty(varargin{1})
+        fileBreakSize = 25000000;
+    else
+        fileBreakSize = varargin{1};
+    end
 else
     fileBreakSize = 25000000;
+end
+
+if nargin > 3
+    if isempty(varargin{2})
+        hasEmgTrigInputs = false;
+    else
+        hasEmgTrigInputs = varargin{2};
+    end
+else
+    hasEmgTrigInputs = false;
 end
 
 iSeg = 1;
@@ -32,7 +46,11 @@ for iFile = 1:length(intanFiles)
     end
     [fileLaserOnset, fileLaserOffset] = detectSyncPulse(outputData.board_adc_data(2,:),2.5);
     [fileLaserControlOnset, fileLaserControlOffset] = detectSyncPulse(outputData.board_adc_data(3,:),2.5);
-    [fileEMGTrigDetection, ~] = detectSyncPulse(outputData.board_adc_data(4,:),2.5);
+    if hasEmgTrigInputs
+        [fileEMGTrigDetection, ~] = [fileEMGTrigDetection, ~] = detectSyncPulse(outputData.board_adc_data(4,:),2.5);
+    else
+        fileEMGTrigDetection = [];
+    end
     if ~isempty(fileLaserOnset)
         laserOnsetInds{iFile} = fileLaserOnset + sum(fileNumSamples)-fileNumSamples(end);
         laserOffsetInds{iFile} = fileLaserOffset + sum(fileNumSamples)-fileNumSamples(end);
