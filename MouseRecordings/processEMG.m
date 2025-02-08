@@ -47,7 +47,7 @@ for iFile = 1:length(intanFiles)
     [fileLaserOnset, fileLaserOffset] = detectSyncPulse(outputData.board_adc_data(2,:),2.5);
     [fileLaserControlOnset, fileLaserControlOffset] = detectSyncPulse(outputData.board_adc_data(3,:),2.5);
     if hasEmgTrigInputs
-        [fileEMGTrigDetection, ~] = [fileEMGTrigDetection, ~] = detectSyncPulse(outputData.board_adc_data(4,:),2.5);
+        [fileEMGTrigDetection, ~] = detectSyncPulse(outputData.board_adc_data(4,:),2.5);
     else
         fileEMGTrigDetection = [];
     end
