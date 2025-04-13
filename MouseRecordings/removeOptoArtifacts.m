@@ -106,8 +106,18 @@ for iSeg = 1:nSegs
     % opto artifact window
     for iOptoPulse = 1:length(allOptos)
 
-        processedArray(1:end-1,allOptos(iOptoPulse)-preSamplesToRemoveOpto:allOptos(iOptoPulse)+postSamplesToRemoveOpto) = ...
-            processedArray(1:end-1,allOptos(iOptoPulse)-preSamplesToRemoveOpto*2-postSamplesToRemoveOpto-1:allOptos(iOptoPulse)-preSamplesToRemoveOpto-1);
+        %due to imperfect syncing, the real laser artifact might be offset
+        %from the index, find the real time, which should still be near the
+        %index, by looking for sudden jump in all channels
+        dataAroundIndex = processedArray(1:end-1,max(1,allOptos(iOptoPulse)-30):min(allOptos(iOptoPulse)+30,size(processedArray,2)));
+        diffSums = sum(abs(diff(dataAroundIndex,[],2)));
+        [~, artInd] = max(diffSums);
+
+        numPreSamples = min(allOptos(iOptoPulse)+1,32);
+        realArtInd = allOptos(iOptoPulse) + artInd - numPreSamples;
+
+        processedArray(1:end-1,realArtInd-preSamplesToRemoveOpto:realArtInd+postSamplesToRemoveOpto) = ...
+            processedArray(1:end-1,realArtInd-preSamplesToRemoveOpto*2-postSamplesToRemoveOpto-1:realArtInd-preSamplesToRemoveOpto-1);
 
     end
 
