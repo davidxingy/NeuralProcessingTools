@@ -18,7 +18,7 @@ behvAlignPerm = [
     1 2 4 5 3 6 7 ...
     ];
 
-behvRegionLabels = {'Climb Up','Climb Down','Misc/Jump','Walk','Misc/Rearing/Still','Groom','Eat'};
+behvRegionLabels = {'Climb Up','Climb Down','Misc/Jump Down','Walk','Misc/Rearing/Still','Groom','Eat'};
 
 for iSess = 1:length(recordingSessions)
 
@@ -56,6 +56,12 @@ for iSess = 1:length(recordingSessions)
     for iRegion = 1:nRegions
         regionBehvNames{iSess,iRegion} = string(join(analyzedBehaviors(regionBehvAssignments{iRegion}),'/'));
     end
+
+    % keep track of which neurons are interneurons
+    strPeakToValleyCutoff = 12.45;
+    ctxPeakToValleyCutoff = 11.25;
+    isInterneuron.str{iSess} = [neuronDataStruct(striatumInds).peakToValley] < strPeakToValleyCutoff;
+    isInterneuron.ctx{iSess} = [neuronDataStruct(cortexInds).peakToValley] < ctxPeakToValleyCutoff;
 
     % get both the multibehavior specificity and single behavior specificty for
     % each neuron
@@ -133,7 +139,7 @@ for iSess = 1:length(recordingSessions)
         shuffStd = std(regionAveValsShuff.(fieldNames{iType}){iSess},[],3);
         modulation.(fieldNames{iType}){iSess} = regionAveVals.(fieldNames{iType}){iSess} >= shuffMean + 3*shuffStd;
         for iRegion = 1:7
-            regionSpec.(fieldNames{iType}){iSess}(iRegion) = sum(modulation.(fieldNames{iType}){iSess}(:,iRegion) & ~any(modulation.(fieldNames{iType}){iSess}(:,setdiff(1:7,iRegion)),2));
+            regionSpec.(fieldNames{iType}){iSess}(:,iRegion) = modulation.(fieldNames{iType}){iSess}(:,iRegion) & ~any(modulation.(fieldNames{iType}){iSess}(:,setdiff(1:7,iRegion)),2);
         end
         
     end
@@ -194,9 +200,11 @@ ctxFigH = figure;
 hold on;
 set(gca,'XTick',1.5:3:21)
 set(gca,'XTickLabel',behvRegionLabels)
-set(gca,'LineWidth',2)
+set(gca,'LineWidth',1)
 set(gca,'tickdir','out')
 set(gca,'fontsize',12)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
 set(gcf,'color','w')
 ylabel('Fraction of Population')
 title('Cortex')
@@ -204,47 +212,70 @@ strFigH = figure;
 hold on;
 set(gca,'XTick',1.5:3:21)
 set(gca,'XTickLabel',behvRegionLabels)
-set(gca,'LineWidth',2)
+set(gca,'LineWidth',1)
 set(gca,'tickdir','out')
 set(gca,'fontsize',12)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
 set(gcf,'color','w')
 ylabel('Fraction of Population')
 title('Striatum')
 
-sessPlotJitter = [-0.1 0 0.1];
-plotColor = lines(2);
+sessPlotJitter = [0 0 0];%[-0.1 0 0.1];
+plotColor = lines(4);
 for iSess = 1:length(recordingSessions)
-    strSpecFraction(iSess,:) = regionSpec.str{iSess}(behvAlignPerm(iSess,:))/size(modulation.str{iSess},1);
+
+    strSpecFraction(iSess,:) = sum(regionSpec.str{iSess}(:,behvAlignPerm(iSess,:)))/size(modulation.str{iSess},1);
     strModFraction(iSess,:) = sum(modulation.str{iSess}(:,behvAlignPerm(iSess,:)))/size(modulation.str{iSess},1);
 
-    ctxSpecFraction(iSess,:) = regionSpec.ctx{iSess}(behvAlignPerm(iSess,:))/size(modulation.ctx{iSess},1);
+    ctxSpecFraction(iSess,:) = sum(regionSpec.ctx{iSess}(:,behvAlignPerm(iSess,:)))/size(modulation.ctx{iSess},1);
     ctxModFraction(iSess,:) = sum(modulation.ctx{iSess}(:,behvAlignPerm(iSess,:)))/size(modulation.ctx{iSess},1);
 
     figure(strFigH)
-    plot((1:3:21)+sessPlotJitter(iSess),strModFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(1,:))
-    plot((2:3:21)+sessPlotJitter(iSess),strSpecFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(2,:))
+    plot((1:3:21)+sessPlotJitter(iSess),strModFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(4,:))
+    plot((2:3:21)+sessPlotJitter(iSess),strSpecFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(3,:)*0.9)
 
     figure(ctxFigH)
-    plot((1:3:21)+sessPlotJitter(iSess),ctxModFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(1,:))
-    plot((2:3:21)+sessPlotJitter(iSess),ctxSpecFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(2,:))
+    plot((1:3:21)+sessPlotJitter(iSess),ctxModFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(4,:))
+    plot((2:3:21)+sessPlotJitter(iSess),ctxSpecFraction(iSess,:),'.','MarkerSize',10,'color',plotColor(3,:)*0.9)
 end
 
 figure(strFigH)
-barH = bar(1:3:21,mean(strModFraction),0.3,'EdgeColor','none','FaceColor',plotColor(1,:)*1.2);
+barH = bar(1:3:21,mean(strModFraction),0.333,'EdgeColor','none','FaceColor',plotColor(4,:)*1.2);
 barH.FaceAlpha = 0.5;
-barH = bar(2:3:21,mean(strSpecFraction),0.3,'EdgeColor','none','FaceColor',plotColor(2,:)*1.1);
+barH = bar(2:3:21,mean(strSpecFraction),0.333,'EdgeColor','none','FaceColor',plotColor(3,:)*1.05);
 barH.FaceAlpha = 0.5;
 
 legend('Behavior Modulated','Single Behavior Specific','box','off')
 
 figure(ctxFigH)
-barH = bar(1:3:21,mean(ctxModFraction),0.3,'EdgeColor','none','FaceColor',plotColor(1,:)*1.2);
+barH = bar(1:3:21,mean(ctxModFraction),0.333,'EdgeColor','none','FaceColor',plotColor(4,:)*1.2);
 barH.FaceAlpha = 0.5;
-barH = bar(2:3:21,mean(ctxSpecFraction),0.3,'EdgeColor','none','FaceColor',plotColor(2,:)*1.1);
+barH = bar(2:3:21,mean(ctxSpecFraction),0.333,'EdgeColor','none','FaceColor',plotColor(3,:)*1.05);
 barH.FaceAlpha = 0.5;
 
 legend('Behavior Modulated','Single Behavior Specific','box','off')
 
+% do t-ttests and show stats about modulation and specificty for ctx vs
+% striatum
+[~, pMod] = ttest(strModFraction(:),ctxModFraction(:));
+[~, pSpec] = ttest(sum(strSpecFraction,2),sum(ctxSpecFraction,2));
+
+disp(['Mean fraction mod M1 neurons: ' num2str(mean(ctxModFraction(:))) ', str neurons: ' num2str(mean(strModFraction(:))),...
+    ', t-test p = ' num2str(pMod)])
+
+disp(['Total spec M1 neurons: ' num2str(mean(sum(ctxSpecFraction,2))) ', str neurons: ' num2str(mean(sum(strSpecFraction,2))),...
+    ', t-test p = ' num2str(pSpec)])
+
+% also look at the number of behaviors each neuron was modulated by, test for
+% difference between cortex and striatum
+aveStrModBehvs = cellfun(@(x) mean(sum(x,2)), modulation.str);
+aveCtxModBehvs = cellfun(@(x) mean(sum(x,2)), modulation.ctx);
+
+[~, pNModPerCell] = ttest(aveStrModBehvs,aveCtxModBehvs);
+
+disp(['Mean # behaviors mod per cell for M1: ' num2str(mean(aveCtxModBehvs)) ', str: ' num2str(mean(aveStrModBehvs)),...
+    ', t-test p = ' num2str(pNModPerCell)])
 
 % make summary plot for multibehavior selectivity
 allSessStrSpec = cat(1,multiSpecCdfFreq.str{:});
@@ -310,10 +341,19 @@ xlabel('Adjusted Skew Metric')
 ylabel('Frequency')
 box off
 set(gcf,'color','w')
-set(gca,'LineWidth',1.5)
+set(gca,'LineWidth',1)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gca,'TickLength',[0.02 0.05])
 set(gca,'fontsize',13)
 set(gca,'TickDir','out')
-xlim([0 1]);
+xlim([0.3 1]);
+
+% do t-ttests for bias metric
+[~, pBias] = kstest2(cat(1,multispecToUse.str{:}),cat(1,multispecToUse.ctx{:}));
+
+disp(['Mean bias metric M1 neurons: ' num2str(mean(cat(1,multispecToUse.ctx{:}))) ', str neurons: ' num2str(mean(cat(1,multispecToUse.str{:}))),...
+    ', ks-test p = ' num2str(pBias)])
 
 % also do it for sparsity metric
 % make summary plot for multibehavior selectivity
@@ -379,11 +419,19 @@ xlabel('Sparsity')
 ylabel('Frequency')
 box off
 set(gcf,'color','w')
-set(gca,'LineWidth',1.5)
+set(gca,'LineWidth',1)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gca,'TickLength',[0.02 0.05])
 set(gca,'fontsize',13)
 set(gca,'TickDir','out')
 xlim([0 1]);
 
+% do t-ttests for sparsity
+[~, pSpars] = kstest2(cat(2,sparsityVals.str{:}),cat(2,sparsityVals.ctx{:}));
+
+disp(['Mean sparsity M1 neurons: ' num2str(nanmean(cat(2,sparsityVals.ctx{:}))) ', str neurons: ' num2str(mean(cat(2,sparsityVals.str{:}))),...
+    ', ks-test p = ' num2str(pSpars)])
 
 % % plotting region of highest specificity
 % plotColors = lines(7);
