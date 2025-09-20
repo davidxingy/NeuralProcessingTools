@@ -58,6 +58,8 @@ if savePlots
     end
 end
 
+lastSegTrigNotEnded(1) = false;
+
 for iSeg = 1:nSegs
 
     tic
@@ -87,7 +89,60 @@ for iSeg = 1:nSegs
 
         optoTimes = find(syncSig{iSeg}(2:end)>optoTrigThresh & syncSig{iSeg}(1:end-1)<=optoTrigThresh);
         optoOffTimes = find(syncSig{iSeg}(2:end)<optoTrigThresh & syncSig{iSeg}(1:end-1)>=optoTrigThresh);
-        allOptos = sort([optoTimes optoOffTimes]);
+
+        % pair up on and off triggers
+        prevSegOpto = [];
+        if lastSegTrigNotEnded(iSeg)
+            % if last segment ended in the middle of a on sequence, the
+            % first off trigger in this segment corresponds to that
+            if ~lastSegTrigNotOpto
+                prevSegOpto = optoOffTimes(1);
+            end
+            optoOffTimes(1) = [];
+        end
+
+        % check that there isn't an abnormal number of on/offs
+        if length(optoTimes) - length(optoOffTimes) > 1 || length(optoTimes) < length(optoOffTimes)
+            warning(['Mismatched number of opto on and offs in segment ' num2str(iSeg)])
+        elseif length(optoTimes) - length(optoOffTimes) == 1
+            lastSegTrigNotEnded(iSeg+1) = true;
+        else
+            lastSegTrigNotEnded(iSeg+1) = false;
+        end
+
+        % for some sessions I used the sync chan for both camera triggers
+        % as well as optos triggers. Don't do removal for camera triggers
+        notOpto = zeros(1,length(optoTimes));
+        if iSeg == 1
+            if length(optoTimes) >= 2 && optoTimes(2) - optoTimes(1) <= 700
+                notOpto(1:2) = 1;
+            end
+        else
+            if ~isempty(optoTimes) && optoTimes(1) - prevSegLastOpto <= 700  
+                notOpto(1) = 1;
+            end
+        end
+
+        notOpto(find(diff(optoTimes) <= 700) + 1) = 1;
+        prevSegLastOpto = optoTimes(end) - samples2Load;
+        
+        % save whether the last on was opto or not
+        if lastSegTrigNotEnded(iSeg+1) && notOpto(end)
+            lastSegTrigNotOpto = true;
+        else
+            lastSegTrigNotOpto = false;
+        end
+
+        % remove the triggers which were cameras and not optos
+        optoTimes(find(notOpto)) = [];
+        if lastSegTrigNotEnded(iSeg+1)
+            % last off isn't in this segment, so remove last point from
+            % notOpto
+            notOpto(end) = [];
+        end
+        optoOffTimes(find(notOpto)) = [];
+
+        allOptos = sort([optoTimes prevSegOpto optoOffTimes]);
 
     else
         thisSegInds = (1:samples2Load) + (iSeg-1)*segLength;
@@ -115,6 +170,10 @@ for iSeg = 1:nSegs
 
         numPreSamples = min(allOptos(iOptoPulse)+1,32);
         realArtInd = allOptos(iOptoPulse) + artInd - numPreSamples;
+        if realArtInd <= (-preSamplesToRemoveOpto*2-postSamplesToRemoveOpto-1)
+            warning('Artifact ind too close to division, skipping...')
+            continue
+        end
 
         processedArray(1:end-1,realArtInd-preSamplesToRemoveOpto:realArtInd+postSamplesToRemoveOpto) = ...
             processedArray(1:end-1,realArtInd-preSamplesToRemoveOpto*2-postSamplesToRemoveOpto-1:realArtInd-preSamplesToRemoveOpto-1);
