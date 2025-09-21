@@ -147,6 +147,7 @@ for iSeg = 1:nSegs
     else
         thisSegInds = (1:samples2Load) + (iSeg-1)*segLength;
         allOptos = intersect(thisSegInds,laserInds) - (iSeg-1)*segLength;
+        syncSig{iSeg} = dataArray(end,:);
     end
 
     optoTimesSeg = zeros(1,size(dataArray,2));
@@ -185,7 +186,7 @@ for iSeg = 1:nSegs
 %     processedArray(1:end-1,find(optoRemoveWindows)) = optoRemoveData(:,1:length(find(optoRemoveWindows)));
 
     % noise detection parameters:
-    noiseParameters.noiseStdThresh = 15;
+    noiseParameters.noiseStdThresh = 30;
     noiseParameters.noiseStdLowThresh = 0.1;
     noiseParameters.noiseVoltThresh = 400;
     noiseParameters.maxStdThreshChans = 50;
@@ -252,7 +253,7 @@ for iSeg = 1:nSegs
     saveas(plotH,fullfile(binDIR,'OptoArtifactRemovalPlots',[binFilename '_Block' num2str(iSeg) '.png']),'png')
     close(plotH);
 
-    disp(['Finished segment ' num2str(iSeg) ' of ' num2str(nSegs) ', time: ' num2str(toc) ' s'])
+    disp(['Finished segment ' num2str(iSeg) ' of ' num2str(nSegs) ', nOptoPulses: ' num2str(length(allOptos)) ', time: ' num2str(toc) ' s'])
 end
 
 % close file
