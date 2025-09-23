@@ -1,5 +1,5 @@
-function localMedianSubtraction(binDIR,metaFilename,binFilename,newBinFilename,nChans2Use,skipChannels,removedChans,chanReordering)
-% localMedianSubtraction(binDIR,metaFilename,binFilename,newBinFilename,nChans2Use,skipChannels,removedChans,chanReordering)
+function localMedianSubtraction(binDIR,metaFilename,binFilename,newBinFilename,nChans2Use,skipChannels,removedChans,chanReordering,physCoords)
+% localMedianSubtraction(binDIR,metaFilename,binFilename,newBinFilename,nChans2Use,skipChannels,removedChans,chanReordering,physCoords)
 % function to do some pre-processing on spikeGLX .bin data to do local
 % median subtraction for all the channels (takes the median of the signals
 % from the surrounding channels and subtracts it from the signal of that
@@ -34,6 +34,17 @@ function localMedianSubtraction(binDIR,metaFilename,binFilename,newBinFilename,n
 %                     shit the recording channels up or down and need to
 %                     realign the channels by depth). Just input an empty
 %                     vector of don't want any reordering.
+% 
+% physCoords        - If the channel order in the data file does not 
+%                     keep channels that are close together in physical
+%                     space next to each other in the file, then use this
+%                     to do the local median calc in a radius in physical
+%                     space (nChans2Use is the value used for the radius). 
+%                     Must be 2xN where N is number of channels in the data
+%                     array. First column is x coord, second is y coord. If
+%                     empty, won't use this function and will just do it by
+%                     channel index.
+%                      
 
 % load in metadata
 meta = ReadMeta(metaFilename, binDIR);
@@ -47,10 +58,16 @@ if isempty(chanReordering)
     chanReordering = 1:nChans;
 end
 
+% if physCoords is empty, then don't use physical coordinates, just do
+% median using channel index
+if isempty(physCoords)
+    useChanInd = true;
+else
+    useChanInd = false ;
+end
 
 % total number of samples
 totSamps = round(str2double(meta.fileTimeSecs) * str2double(meta.imSampRate));
-
 % load in data, in segments of 1 000 000 samples  (to avoid running out of
 % memory)
 segLength = 3000000;
@@ -82,9 +99,14 @@ for iSeg = 1:nSegs
             continue
         end
         
-        localChanInds = max(1,iChan-round(nChans2Use/2)) : .../;'
-            min(iChan+round(nChans2Use/2),size(dataArray,1));
-        
+        if useChanInd
+            localChanInds = max(1,iChan-round(nChans2Use/2)) : .../;'
+                min(iChan+round(nChans2Use/2),size(dataArray,1));
+        else
+            allDists = sqrt((physCoords(iChan,1) - physCoords(:,1)).^2 + (physCoords(iChan,2) - physCoords(:,2)).^2);
+            localChanInds = find(allDists < nChans2Use);
+        end
+
         %don't use any channels that are being skipped in the calculation
         localChanInds = setdiff(localChanInds, skipChannels);
         
