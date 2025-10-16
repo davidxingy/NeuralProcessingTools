@@ -34,7 +34,11 @@ end
 for iNeuron = 1:length(neuronDataStruct)
     
     spikesPerBin = histcounts(neuronDataStruct(iNeuron).timeStamps,1:(binSize*30):maxSamples);
-    smoothedFRs(iNeuron,:) = convGauss(spikesPerBin, binSize, gaussStd,0);
+    if gaussStd == 0
+        smoothedFRs(iNeuron,:) = spikesPerBin;
+    else
+        smoothedFRs(iNeuron,:) = convGauss(spikesPerBin, binSize, gaussStd,1);
+    end
     
 end
 
@@ -53,7 +57,11 @@ noNanFRs = smoothedFRs;
 
 % set time bins that have artifact to NaN
 artifacts = histcounts(artifactTS,1:(30*binSize):maxSamples);
-artifactBins = find(convGauss(artifacts, binSize, gaussStd,0));
+if gaussStd == 0
+    artifactBins = find(artifacts);
+else
+    artifactBins = find(convGauss(artifacts, binSize, gaussStd,0));
+end
 
 cortexFRs(:,artifactBins) = nan;
 striatumFRs(:,artifactBins) = nan;
