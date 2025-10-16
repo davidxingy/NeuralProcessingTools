@@ -85,7 +85,7 @@ for iAnimal = 1:length(allDirs)
             end
 
             %if there are multiple zeros, then that means it was artifact, don't use
-            if sum(baselineEMG(iThreshChan,:)==0) > 20
+            if sum(baselineEMG(iThreshChan,:)<1e-4) > 20
                 continue
             end
 
@@ -115,58 +115,58 @@ for iAnimal = 1:length(allDirs)
         threshCrossReduc{iAnimal,iThreshChan} = reducInds;
         threshCrossNeur{iAnimal,iThreshChan} = crossingNeurInds;
 
-        % % also do shifts
-        % for iShift = 1:100
-        %
-        %     shiftAmount(iShift) = randi(size(downsampEMG,2)-10000*2)+10000;
-        %
-        %     threshCrossingsShift = threshCrossings + shiftAmount(iShift);
-        %     threshCrossingsShift(threshCrossingsShift > size(downsampEMG,2) - periTransTimes(2) - 1) = ...
-        %         threshCrossingsShift(threshCrossingsShift > size(downsampEMG,2) - periTransTimes(2) - 1) - (size(downsampEMG,2) - periTransTimes(2) - 1);
-        %
-        %     threshCrossingsShift(threshCrossingsShift < periTransTimes(1)+1) = [];
-        %     % find the corresponding neural index for each threshold crossing
-        %     currentDir = pwd;
-        %     cd(fullfile(baseDir,'ProcessedData'))
-        %     crossingNeurIndsShift = round(NeurEMGSync(threshCrossingsShift*20,...
-        %         frameEMGSamples, frameNeuropixelSamples, 'EMG')/30);
-        %     cd(currentDir)
-        %
-        %     % remove any emg crossings that is outside of neural data range
-        %     outRangeCrossings = find(crossingNeurIndsShift>size(allFRs,2)-periTransTimes(2));
-        %     threshCrossingsShift(outRangeCrossings) = [];
-        %     crossingNeurIndsShift(outRangeCrossings) = [];
-        %
-        %     periCrossingFRShift = zeros(length(threshCrossingsShift),sum(periTransTimes)+1,size(allFRs,1));
-        %     periCrossingEMGShift = zeros(length(threshCrossingsShift),sum(periTransTimes)+1,size(downsampEMG,1));
-        %
-        %     for iCross = 1:length(threshCrossingsShift)
-        %
-        %         %get neural activity
-        %         for iNeuron = 1:size(allFRs,1)
-        %             periCrossingFRShift(iCross,:,iNeuron) = allFRs(iNeuron,...
-        %                 crossingNeurIndsShift(iCross)-periTransTimes(1):crossingNeurIndsShift(iCross)+periTransTimes(2));
-        %         end
-        %
-        %         %get EMG activity
-        %         for iMuscle = 1:size(downsampEMG,1)
-        %             periCrossingEMGShift(iCross,:,iMuscle) = downsampEMG(iMuscle,...
-        %                 threshCrossingsShift(iCross)-periTransTimes(1):threshCrossingsShift(iCross)+periTransTimes(2));
-        %         end
-        %
-        %     end
-        %
-        %     nanNeurCrossingsShift = find(any(isnan(periCrossingFRShift(:,:))'));
-        %     threshCrossingsShift(nanNeurCrossingsShift) = [];
-        %     crossingNeurIndsShift(nanNeurCrossingsShift) = [];
-        %     periCrossingFRShift(nanNeurCrossingsShift,:,:) = [];
-        %     periCrossingEMGShift(nanNeurCrossingsShift,:,:) = [];
-        %
-        %     aveStrShift(iShift,:) = mean(mean(periCrossingFRShift(:,:,1:length(striatumInds)),3)*1000,1) - mean(mean(mean(periCrossingFRShift(:,1:periTransTimes(1)-50,1:length(striatumInds)))))*1000;
-        %     aveCtxShift(iShift,:) = mean(mean(periCrossingFRShift(:,:,length(striatumInds)+1:end),1)*1000,3) - mean(mean(mean(periCrossingFRShift(:,1:periTransTimes(1)-50,length(striatumInds)+1:end))))*1000;
-        %     aveEMGShift(iShift,:) = mean(squeeze(periCrossingEMGShift(:,:,threshChan)))/100 - mean(mean(mean(periCrossingEMGShift(:,1:periTransTimes(1)-50,:))))/100;
-        %
-        % end
+        % also do shifts
+        for iShift = 1:100
+        
+            shiftAmount(iShift) = randi(size(downsampEMG,2)-10000*2)+10000;
+        
+            threshCrossingsShift = threshCrossings + shiftAmount(iShift);
+            threshCrossingsShift(threshCrossingsShift > size(downsampEMG,2) - periTransTimes(2) - 1) = ...
+                threshCrossingsShift(threshCrossingsShift > size(downsampEMG,2) - periTransTimes(2) - 1) - (size(downsampEMG,2) - periTransTimes(2) - 1);
+        
+            threshCrossingsShift(threshCrossingsShift < periTransTimes(1)+1) = [];
+            % find the corresponding neural index for each threshold crossing
+            currentDir = pwd;
+            cd(fullfile(baseDir,'ProcessedData'))
+            crossingNeurIndsShift = round(NeurEMGSync(threshCrossingsShift*20,...
+                frameEMGSamples, frameNeuropixelSamples, 'EMG')/30);
+            cd(currentDir)
+        
+            % remove any emg crossings that is outside of neural data range
+            outRangeCrossings = find(crossingNeurIndsShift>size(allFRs,2)-periTransTimes(2));
+            threshCrossingsShift(outRangeCrossings) = [];
+            crossingNeurIndsShift(outRangeCrossings) = [];
+        
+            periCrossingFRShift = zeros(length(threshCrossingsShift),sum(periTransTimes)+1,size(allFRs,1));
+            periCrossingEMGShift = zeros(length(threshCrossingsShift),sum(periTransTimes)+1,size(downsampEMG,1));
+        
+            for iCross = 1:length(threshCrossingsShift)
+        
+                %get neural activity
+                for iNeuron = 1:size(allFRs,1)
+                    periCrossingFRShift(iCross,:,iNeuron) = allFRs(iNeuron,...
+                        crossingNeurIndsShift(iCross)-periTransTimes(1):crossingNeurIndsShift(iCross)+periTransTimes(2));
+                end
+        
+                %get EMG activity
+                for iMuscle = 1:size(downsampEMG,1)
+                    periCrossingEMGShift(iCross,:,iMuscle) = downsampEMG(iMuscle,...
+                        threshCrossingsShift(iCross)-periTransTimes(1):threshCrossingsShift(iCross)+periTransTimes(2));
+                end
+        
+            end
+        
+            nanNeurCrossingsShift = find(any(isnan(periCrossingFRShift(:,:))'));
+            threshCrossingsShift(nanNeurCrossingsShift) = [];
+            crossingNeurIndsShift(nanNeurCrossingsShift) = [];
+            periCrossingFRShift(nanNeurCrossingsShift,:,:) = [];
+            periCrossingEMGShift(nanNeurCrossingsShift,:,:) = [];
+        
+            aveStrShift(iShift,:) = mean(mean(periCrossingFRShift(:,:,1:length(striatumInds)),3)*1000,1) - mean(mean(mean(periCrossingFRShift(:,1:periTransTimes(1)-50,1:length(striatumInds)))))*1000;
+            aveCtxShift(iShift,:) = mean(mean(periCrossingFRShift(:,:,length(striatumInds)+1:end),1)*1000,3) - mean(mean(mean(periCrossingFRShift(:,1:periTransTimes(1)-50,length(striatumInds)+1:end))))*1000;
+            aveEMGShift(iShift,:) = mean(squeeze(periCrossingEMGShift(:,:,threshChan)))/100 - mean(mean(mean(periCrossingEMGShift(:,1:periTransTimes(1)-50,:))))/100;
+        
+        end
 
         % now get the actual data around the crossings
         [periCrossingFR, periCrossingEMG, crossRegion, nanNeurCrossings] = getDataFromCrossings(threshCrossings,crossingNeurInds,reducInds,...
@@ -425,7 +425,7 @@ for iAnimal = 1:3
         normNeurAve{iAnimal,iRegion} = unNormNeurAve{iAnimal,iRegion}./allRegionMaxFRs;
     end
 end
-
+    
 % do pairwise comparison of correlation stability across regions
 % don't use any neurons which have nans
 goodCorrs = neurEmgCorrs(~any(isnan(neurEmgCorrs),2),:);
