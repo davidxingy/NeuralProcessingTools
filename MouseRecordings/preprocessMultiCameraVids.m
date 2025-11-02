@@ -1,6 +1,12 @@
-function preprocessMultiCameraVids(vidDir,baseFilename)
-%PREPROCESSMULTICAMERAVIDS Summary of this function goes here
-%   Detailed explanation goes here
+function preprocessMultiCameraVids(vidDir,baseFilename,lensDistortionCalibrations)
+% preprocessMultiCameraVids(vidDir,baseFilename,lensDistortionCalibrations)
+% Fixed dropped frames from synced multiple camera recordings by replacing
+% dropped frames with the last recorded frame. Also performs lens
+% distortion correction if desired.
+
+if nvargin < 3
+    lensDistortionCalibrations = [];
+end
 
 allFiles = string(ls(vidDir));
 nonCalibrationFiles = allFiles(~cellfun(@(x) contains(x,'CameraCalibration'),string(allFiles)));
@@ -40,6 +46,12 @@ for iCamera = 1:nCameras
         while readerH.hasFrame
            
             frame = readFrame(readerH);
+            
+            % undistort if desired
+            if ~isempty(lensDistortionCalibrations)
+                frame = undistortImage(frame,lensDistortionCalibrations{iCamera});
+            end
+            
             writeVideo(writerH,frame);
             
             % if at a skipped frame, repeat the same frame
