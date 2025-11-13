@@ -4,7 +4,7 @@ function preprocessMultiCameraVids(vidDir,baseFilename,lensDistortionCalibration
 % dropped frames with the last recorded frame. Also performs lens
 % distortion correction if desired.
 
-if nvargin < 3
+if nargin < 3
     lensDistortionCalibrations = [];
 end
 
