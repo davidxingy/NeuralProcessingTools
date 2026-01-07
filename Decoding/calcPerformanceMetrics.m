@@ -34,6 +34,10 @@ function metrics=calcPerformanceMetrics(estimates, actuals, varargin)
 %               value inputted in outlierLvl) before calculating the
 %               perforance metrics. Default no removal
 % 
+% weightChans - If this is not empty, then the calculation for weighted R2s
+%               will only use these channels. If this input is not used,
+%               then it will use all the channels. Default empty (use all chans)
+% 
 % Outputs:
 % metrics -     A struct containing all the calulated metrics. Currently
 %               contains the following fields:
@@ -52,14 +56,20 @@ function metrics=calcPerformanceMetrics(estimates, actuals, varargin)
 %               estimate variance over the real variance:
 %               var(estimate)/var(actual)
 % 
+%   WeightedR2: For multi channel calculations, this finds a R2 across all
+%               channels, which does a weighted mean of the R2s using the
+%               varaiance of the real activity in the channel as the weight
+% 
 % David Xing, last updated 7/26/2024
 
 % 10/17/2018 - Added VAF output
 % 
 % 7/26/2024 - Added outlier removal option
+% 
+% 8/5/2024 - Added Weighted R2 option
 
 % parse inputs, set defaults
-narginchk(2,4);
+narginchk(2,6);
 % dimension
 if nargin>2
     if(isempty(varargin{1}))
@@ -84,16 +94,27 @@ end
 
 % ourlier removal
 if nargin>4
-    if(isempty(varargin{2}))
+    if(isempty(varargin{3}))
         removeOutliers = false;
         outlierLvl = 100;
     else
         removeOutliers = true;
-        outlierLvl= varargin{2};
+        outlierLvl = varargin{3};
     end
 else
     removeOutliers = false;
     outlierLvl = 100;
+end
+
+% weighted average channels
+if nargin>5
+    if(isempty(varargin{4}))
+        weightChans = [];
+    else
+        weightChans = varargin{4};
+    end
+else
+    weightChans = [];
 end
 
 % cell to hold all the outputs since it's easier to iterate across, will convert to struct later
@@ -101,7 +122,8 @@ end
 % 2  - MSE
 % 3  - CC
 % 4  - VAF
-metricsCell={{},{},{},{}};
+% 5  - Weighted R2
+metricsCell={{},{},{},{},{}};
 
 % change to cell array if not already one
 isCell=true;
@@ -132,6 +154,10 @@ for iCell=1:length(estimates)
         end
     end
     
+    if isempty(weightChans)
+        weightChans = 1:nTrials;
+    end
+        
     %do for each row/column
     for iTrial=1:nTrials
         if dim==1
@@ -164,23 +190,30 @@ for iCell=1:length(estimates)
          end
          
          %R2:
-         R2=1-sum((trialEst-trialReal).^2)/sum((trialReal-mean(trialReal)).^2);
+         R2 = 1-sum((trialEst-trialReal).^2)/sum((trialReal-mean(trialReal)).^2);
          metricsCell{1}{iCell}(iTrial)=R2;
          
          %MSE:
-         MSE=sum((trialEst-trialReal).^2)/length(trialEst);
+         MSE = sum((trialEst-trialReal).^2)/length(trialEst);
          metricsCell{2}{iCell}(iTrial)=MSE;
          
          %CC:
-         covarMat=cov(trialEst,trialReal);
-         CC=covarMat(1,2)/(sqrt(covarMat(1,1))*sqrt(covarMat(2,2)));
+         covarMat = cov(trialEst,trialReal);
+         CC = covarMat(1,2)/(sqrt(covarMat(1,1))*sqrt(covarMat(2,2)));
          metricsCell{3}{iCell}(iTrial)=CC;
          
          %VAF:
-         VAF=var(trialEst)/var(trialReal);
+         VAF = var(trialEst)/var(trialReal);
          metricsCell{4}{iCell}(iTrial)=VAF;
          
+         %Get the variance in the real for the weighted R2 metric:
+         chanVar(iTrial) = var(trialReal);
+         
     end
+    
+    %calculate weighted R2
+    weightedR2 = chanVar(weightChans)*metricsCell{1}{iCell}(weightChans)/sum(chanVar(weightChans));
+    metricsCell{5}{iCell} = weightedR2;
     
 end
 
@@ -190,11 +223,13 @@ if (~isCell)
     metrics.MSE=metricsCell{2}{1};
     metrics.CC=metricsCell{3}{1};
     metrics.VAF=metricsCell{4}{1};
+    metrics.R2Weighted=metricsCell{5}{1};
 else
     metrics.R2=metricsCell{1};
     metrics.MSE=metricsCell{2};
     metrics.CC=metricsCell{3};
     metrics.VAF=metricsCell{4};
+    metrics.R2Weighted = metricsCell{5};
 end
 
 
