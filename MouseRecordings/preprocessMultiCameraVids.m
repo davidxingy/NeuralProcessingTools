@@ -56,7 +56,13 @@ for iCamera = 1:nCameras
             
             % if at a skipped frame, repeat the same frame
             if any(currentReadFrame + sum(nPrevFrames(1:iFile)) == droppedFrames{iCamera})
-                writeVideo(writerH,frame);
+
+                % put a little mark at the corner to indicate it's a repeat
+                % frame
+                repeatFrame = frame;
+                repeatFrame(end-5:end,end-5:end,:) = 0;
+
+                writeVideo(writerH,repeatFrame);
                 currentWriteFrame = currentWriteFrame + 1;
             end
         
