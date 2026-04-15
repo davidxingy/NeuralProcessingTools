@@ -1,4 +1,4 @@
-function [plotH, functionVars]= showMultiCameraMarkerTracker(currentFrame,initiatePlot,functionVarsIn,baseDir)
+function [plotH, functionVars]= showMultiCameraMarkerTracker(currentFrame,initiatePlot,functionVarsIn,functionInitParams)
 % [plotH, functionVars]= showMultiCameraMarkerTracker(currentFrame,initiatePlot,functionVarsIn,argsIn)
 % Function to work with my Matlab MarkerTracker to show all frames of all cameras during a multi-camera arena recording. 
 % Called with the plotMarkerTrakerPhysData.m function
@@ -16,89 +16,116 @@ function [plotH, functionVars]= showMultiCameraMarkerTracker(currentFrame,initia
 %                     used by Markertracker to pass variables to this
 %                     function specified by functionVars
 % 
-% baseDir           - The folder containin the recording session videos
-% 
+% functionInitParams - Standard input for MarkerTracker synced functions,
+%                     used to pass function specific parameters to this
+%                     plotting function. Parameters for this function are
+%                     described below
 % 
 
 if initiatePlot
 
-    load('UMAP.mat','reduction','behvLabelsNoArt','analyzedBehaviors','origDownsampEMGInd')
-    load('VideoSyncFrames.mat')
+    % get plot parameters
+    baseDir = functionInitParams.baseDir; %folder with video files
+    cameraInds = functionInitParams.cameraInds; %for all the cameras
+    primaryCamInd = functionInitParams.primaryCamInd; %Which camera is being used by the main marker tracker gui (use index start by 1 for this) 
+    primaryCamFileNum = functionInitParams.primaryCamFileNum; %Which file from that camera is being used by the tracker gui (use index start by 1 for this)
+    baseFileName = functionInitParams.baseFileName; %Common base for the name of all the vid files
+    flipVert = functionInitParams.flipVert; %for each of the cameras, determine whether to vertically flip the image
 
-    behvLabelsDown = behvLabelsNoArt(1:1:end);
+    plotH = figure('Color','w','Visible','on','units','pixels','OuterPosition',[100, 50, 1000, 1000]);
+    tiledlayout(length(cameraInds)-1,1,'Padding','tight','TileSpacing','none')
 
-    figH = figure('Color','w','Visible','on','units','pixels','OuterPosition',[100, 50, 1000, 1000]);
-    hold on;
-    colormap = turbo(length(analyzedBehaviors));
-    colormap(9,:) = colormap(9,:)*1.2;
-    
-    backgroundMarkerSize = 0.5;
-    behvMarkerSize = 2;
-    trailLength = 5;
+    allVidFiles = dir(baseDir);
 
-    plotH(length(analyzedBehaviors)+1) = plot(reduction(behvLabelsDown==0,1),reduction(behvLabelsDown==0,2),'.','color',[0.7 0.7 0.7],'MarkerSize',backgroundMarkerSize);
+    % Assuming that video files are .avi and that we're only using "_FrameFilled" files
+    allVidFiles = allVidFiles(contains(string({allVidFiles.name}),'.avi'));
+    allVidFiles = allVidFiles(contains(string({allVidFiles.name}),'_FrameFilled'));
 
-    for iBehv = 1:length(analyzedBehaviors)
-        plotH(iBehv) = plot(reduction(behvLabelsDown==iBehv,1),reduction(behvLabelsDown==iBehv,2),'.','color',colormap(iBehv,:),'MarkerSize',behvMarkerSize);
+    iSecondaryCam = 0;
+    for iCamera = 1:length(cameraInds)
+
+        %Camera file format should be: "[recording name]_Camera[camera number in 1 digit]-[file number in 4 digits]_FrameFilled.avi"
+        %e.g. 'D050-120525-ArenaRecording_Camera2-0000_FrameFilled.avi'
+
+        camFilenameInds = contains(string({allVidFiles.name}),[baseFileName '_Camera' num2str(cameraInds(iCamera)) '-' ]);
+        camFileNames = string({allVidFiles(camFilenameInds).name});
+
+        if isempty(camFileNames)
+            error(['No video files found for camera ' num2str(cameraInds(iCamera))]);
+        end
+
+        %now go through each of the files corresponding to this camera
+        for iFile = 1:length(camFileNames)
+
+            % make video file reader object
+            vidReaders{iCamera,iFile} = VideoReader(fullfile(baseDir,camFileNames{iFile}));
+            fileNumFrames(iCamera,iFile) = vidReaders{iCamera,iFile}.NumFrames;
+            
+        end
+
+        %make plot axes for secondary cameras
+        if iCamera ~= primaryCamInd
+            iSecondaryCam = iSecondaryCam + 1;
+            nexttile
+            initialFrame = vidReaders{iCamera,1}.readFrame;
+            if flipVert(iCamera)
+                initialFrame = fliplr(flipud(initialFrame));
+            end
+            axesHandles{iSecondaryCam} = imagesc(initialFrame);
+            axis off
+            flipSecondary(iSecondaryCam) = flipVert(iCamera);
+        end
+
     end
 
-    analyzedBehaviors = {'grooming','eating','walkgrid','walkflat','rearing','climbup','climbdown','still','jumping','jumpdown'};
+    % double check that all the cameras have the same number of total frames
+%     if length(unique(sum(fileNumFrames,2))) ~= 1
+%         error('Cameras have different number of total frames!')
+%     end
 
-    legendNames = [analyzedBehaviors 'background'];
-    legendH = legend(plotH,legendNames,'Box','off','FontSize',14);
-    for iLabel = 1:length(legendH.String)
-        legendH.String{iLabel} = ['\color[rgb]{' num2str(plotH(iLabel).Color) '} ' legendH.String{iLabel}];
-    end
-
-    %plot current marker
-    if behvLabelsDown(1) == 0
-        frameMarkerColor = [0.7 0.7 0.7];
-    else
-        frameMarkerColor = colormap(behvLabelsDown(1),:);
-    end
-    functionVars{1} = plot(reduction(1,1),reduction(1,2),'o','MarkerEdgeColor','k','MarkerFaceColor',frameMarkerColor,'MarkerSize',5);
-
-    %plot trailing tail
-    functionVars{2} = plot(reduction(1:trailLength,1),reduction(1:trailLength,2),'color','k');
-
-    axis off
-    set(gcf,'Color','w')
-    set(gca,'LineWidth',1.5)
-    set(gca,'FontSize',12)
-    set(gca,'TickDir','out')
-
-    functionVars{3} = frameEMGSamples;
-    functionVars{4} = trailLength;
-    functionVars{5} = reduction;
-    functionVars{6} = behvLabelsDown;
-    functionVars{7} = origDownsampEMGInd;
+    functionVars{1} = vidReaders;
+    functionVars{2} = fileNumFrames;
+    functionVars{3} = axesHandles;
+    functionVars{4} = primaryCamInd;
+    functionVars{5} = primaryCamFileNum;
+    functionVars{6} = flipSecondary;
 
 else
 
-    iVid = 1;
-    %get the emg index at the current frame
-    rawEMGInd = functionVarsIn{3}{1}{iVid}(currentFrame);
-    uMAPEMGInd = find(round(rawEMGInd/20) == functionVarsIn{7});
+    % go through each secondary camera
+    vidReaders = functionVarsIn{1};
+    fileNumFrames = functionVarsIn{2};
+    axesHandles = functionVarsIn{3};
+    primaryCamInd = functionVarsIn{4};
+    primaryCamFileNum = functionVarsIn{5};
+    flipSecondary = functionVarsIn{6};
 
-    if isempty(uMAPEMGInd)
-        return
-    end
-    
-    functionVarsIn{1}.XData = functionVarsIn{5}(uMAPEMGInd,1);
-    functionVarsIn{1}.YData = functionVarsIn{5}(uMAPEMGInd,2);
+    secondaryCameras = 1:length(vidReaders);
+    secondaryCameras(primaryCamInd) = [];
 
-    colormap = turbo(10);
-    colormap(9,:) = colormap(9,:)*1.2;
+    % see what the current frame is in context of all video files combined
+    frameSums = [0 cumsum(fileNumFrames(primaryCamInd,:))];
+    realCurrentFrame = frameSums(primaryCamFileNum) + currentFrame;
 
-    if functionVarsIn{6}(uMAPEMGInd) == 0
-        functionVarsIn{1}.MarkerFaceColor = [0.7 0.7 0.7];
-    else
-        functionVarsIn{1}.MarkerFaceColor = colormap(functionVarsIn{6}(uMAPEMGInd),:);
-    end
+    for iCamera = 1:length(secondaryCameras)
 
-    if uMAPEMGInd > functionVarsIn{4}
-        functionVarsIn{2}.XData = functionVarsIn{5}(uMAPEMGInd-functionVarsIn{4}:uMAPEMGInd,1);
-        functionVarsIn{2}.YData = functionVarsIn{5}(uMAPEMGInd-functionVarsIn{4}:uMAPEMGInd,2);
+        %see which file to use
+        frameCutoffs = [0 cumsum(fileNumFrames(secondaryCameras(iCamera),:))]; 
+        
+        fileToUse = find(frameCutoffs >= realCurrentFrame,1)-1;
+
+        fileFrame = realCurrentFrame - frameCutoffs(fileToUse);
+
+        %read the frame
+        frame = read(vidReaders{secondaryCameras(iCamera),fileToUse},fileFrame);
+
+        if flipSecondary(iCamera)
+            frame = fliplr(flipud(frame));
+        end
+
+        %plot 
+        axesHandles{iCamera}.CData = frame;
+
     end
 
 end
