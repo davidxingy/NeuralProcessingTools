@@ -96,7 +96,7 @@ dataNames.emgMetaData = fullfile(dataNames.processedDataFolder,[baseSessionName 
 
 
 % add Histology coordinates file
-dataNames.histologyCoords = fullfile(dataNames.processedDataFolder,'histologyCoords.mat');
+dataNames.histologyCoords = fullfile(dataNames.processedDataFolder,['histologyCoords' appendSuffix]);
 
 
 % add neural-EMG sync script file
@@ -111,13 +111,18 @@ dataNames.UMAPFile = fullfile(dataNames.processedDataFolder,'UMAP.mat');
 dataNames.VideoSyncFrames = fullfile(dataNames.processedDataFolder,'VideoSyncFrames.mat');
 
 
-% add UMAP activity overlay analyses output files
-dataNames.UMAPOverlayNeurons = fullfile(dataNames.processedDataFolder,'UMAPFRs','NeuronRegionProps.mat');
-dataNames.UMAPOverlayMuscles = fullfile(dataNames.processedDataFolder,'UMAPFRs','MuscleRegionProps.mat');
+% get UMAP activity overlay analysis output files
+if nImplantedProbes == 1
+    appendSuffix = '';
+elseif nImplantedProbes == 2
+    appendSuffix = ['_' probeRegion];
+end
+dataNames.NeuronRegionProps = fullfile(dataNames.processedDataFolder,['UMAPFRs' appendSuffix],'NeuronRegionProps.mat');
+dataNames.MuscleRegionProps = fullfile(dataNames.processedDataFolder,['UMAPFRs' appendSuffix],'MuscleRegionProps.mat');
 
 
 % add manual behavior annotation data
-dataNames.UMAPOverlayNeurons = fullfile(dataNames.processedDataFolder,'BehaviorAnnotations','BehaviorLabels.mat');
+dataNames.BehaviorAnnotationLabels = fullfile(dataNames.processedDataFolder,'BehaviorAnnotations','BehaviorLabels.mat');
 
 
 % add NP data file (post-local median sub, post-artifact removal). Some of
@@ -147,6 +152,15 @@ end
 
 % get NP artifact timestamps
 dataNames.npArtifactTimestamps = fullfile(dataNames.npDataFolder,'artifactTimestamps.mat');
+
+
+% add EMG-activity based single behavior classification analysis file
+dataNames.EMGSingleBehvClassifiers = fullfile(dataNames.processedDataFolder,'EMGSingleBehvClassifiers.mat');
+
+
+% and the behavior initations/termination triggered activity based on the
+% classificaiton analysis
+dataNames.EMGClassifierInits = fullfile(dataNames.processedDataFolder,'EMGClassifierInits.mat');
 
 
 
