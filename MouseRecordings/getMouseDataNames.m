@@ -153,6 +153,10 @@ end
 % get NP artifact timestamps
 dataNames.npArtifactTimestamps = fullfile(dataNames.npDataFolder,'artifactTimestamps.mat');
 
+% also, for some sessions, there were issues with baseline drift hitting
+% the amplifier rails on the NP recordings, these files have a separate
+% "flatlineDetections" file containing those artfiacts
+dataNames.flatlineDetections = fullfile(dataNames.npDataFolder,'flatlineDetections.mat');
 
 % add EMG-activity based single behavior classification analysis file
 dataNames.EMGSingleBehvClassifiers = fullfile(dataNames.processedDataFolder,'EMGSingleBehvClassifiers.mat');
@@ -163,6 +167,19 @@ dataNames.EMGSingleBehvClassifiers = fullfile(dataNames.processedDataFolder,'EMG
 dataNames.EMGClassifierInits = fullfile(dataNames.processedDataFolder,'EMGClassifierInits.mat');
 
 
+% add data file for EMG-activation triggered trials (+ associated controls)
+if nImplantedProbes == 1
+    appendSuffix = '';
+elseif nImplantedProbes == 2
+    appendSuffix = ['_' probeRegion];
+end
+dataNames.EMGTrigInitiations = fullfile(dataNames.processedDataFolder,['EMGTrigInitiations' appendSuffix '.mat']);
+
+% add data file for kinematics from Lightning Pose
+dataNames.litPoseKinematics = fullfile(dataNames.processedDataFolder,'litPoseKinematics.mat');
+
+% add data file for Arena spatial positions and coordinate transforms
+dataNames.arenaSpatialCoords = fullfile(dataNames.processedDataFolder,'arenaSpatialCoords.mat');
 
 end % of function
 
