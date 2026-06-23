@@ -1,8 +1,7 @@
-function neuronDataStruct = processNeurons(baseDIR,phyModified,binFile)
+function neuronDataStruct = processNeurons(baseDIR,phyModified,binFile,startSample)
 
 waveforms = readNPY(fullfile(baseDIR, 'templates.npy'));
 electrodPos = readNPY(fullfile(baseDIR, 'channel_positions.npy'));
-load(fullfile(baseDIR, 'rez.mat'));
 
 if phyModified
     
@@ -10,6 +9,7 @@ if phyModified
     phyClusters = readtable(fullfile(baseDIR,'cluster_info.tsv'), "FileType","text",'Delimiter', '\t');
     spikeClusterLabels = readNPY(fullfile(baseDIR,'spike_clusters.npy'));
     spikeTimes = readNPY(fullfile(baseDIR,'spike_times.npy'));
+    spikeTimes = spikeTimes + startSample;
 
     % set up loading in raw bin file
     [binDIR, binFilename, binExt] = fileparts(binFile);
@@ -29,13 +29,18 @@ if phyModified
 
         clusterSpikes = find(spikeClusterLabels == clusterIds(iUnit));
         neuronDataStruct(iUnit).timeStamps = sort(spikeTimes(clusterSpikes));
+        %Remove any time stamps which are within 1ms of the previous time
+        %stamp, which I sometimes do during Phy when kilosort does this
+        %weird thing where it counts a spike multiple times with a small
+        %offset
+        neuronDataStruct(iUnit).timeStamps(find(diff(neuronDataStruct(iUnit).timeStamps) < 30)+1) = [];
 
         % now get the  waveforms (rather than using the templates,
         % use the averge waveforms from the data itself)
 
         % to save time, only do up to 2000 spikes (subsample if more than
         % 2000 spikes in a unit)
-        maxSpikesToGet = 2000;
+        maxSpikesToGet = 20;
         if length(neuronDataStruct(iUnit).timeStamps) > maxSpikesToGet
             spikeSampleInds = neuronDataStruct(iUnit).timeStamps(...
                 randperm(length(neuronDataStruct(iUnit).timeStamps), maxSpikesToGet));
@@ -67,18 +72,31 @@ if phyModified
 
         meanWaveforms = squeeze(nanmean(waveforms,3));
         % find the biggest channel
-        [~, maxChan] = max(max(abs(meanWaveforms)));
+        [~, maxChan] = max(max(abs(meanWaveforms(:,1:end-1))));
         
         % get amplitude and peak-to-valley
-        [maxValues, maxInds] = max(meanWaveforms(:,maxChan));
-        [minValues, minInds] = min(meanWaveforms(:,maxChan));
+        % first get the peak (whether positive or negative)
+        [peakValue, peakInd] = max(abs(meanWaveforms(:,maxChan)));
+        % next, get the next peak after the peak (in opposite polarity)
+        if meanWaveforms(peakInd,maxChan) < 0 
+            [valleyValue, valleyInd] = max(meanWaveforms(peakInd+1:end,maxChan));
+            valleyInd = valleyInd + peakInd;
+            peakValue = peakValue * -1;
+        elseif meanWaveforms(peakInd,maxChan) > 0 
+            [valleyValue, valleyInd] = max(-1*meanWaveforms(peakInd+1:end,maxChan));
+            valleyInd = valleyInd + peakInd;
+            valleyValue = -1*valleyValue;
+        else
+            warning('Neuron''s peak is 0, most likely error in getting waveform');
+        end
 
         % save to data struct
         neuronDataStruct(iUnit).waveforms = meanWaveforms;
         neuronDataStruct(iUnit).biggestChan = maxChan;
         neuronDataStruct(iUnit).depth = electrodPos(maxChan,2);
-        neuronDataStruct(iUnit).amplitude = maxValues - minValues;
-        neuronDataStruct(iUnit).peakToValley = abs(maxInds - minInds);
+        neuronDataStruct(iUnit).x = electrodPos(maxChan,1);
+        neuronDataStruct(iUnit).amplitude = abs(peakValue - valleyValue);
+        neuronDataStruct(iUnit).peakToValley = abs(valleyInd - peakInd);
 
 
     end
@@ -89,6 +107,8 @@ if phyModified
     neuronDataStruct = neuronDataStruct(sortInds);
 
 else
+
+    load(fullfile(baseDIR, 'rez.mat'));
 
     % no phy curation, just use ks output directly
     nUnits = size(waveforms,1);
