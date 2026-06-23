@@ -1,5 +1,5 @@
-function calcFiringRates(baseRecordingFolder, binSize, gaussStd, depthCtxStr, depthStr, minSpikes, minAmp)
-% function calcFiringRates(baseRecordingFolder, binSize, gaussStd, depthCtxStr, depthStr)
+function calcFiringRates(recordingSession, binSize, gaussStd, depthCtxStr, depthStr, minSpikes, minAmp, brainRegion)
+% function calcFiringRates(recordingSession, binSize, gaussStd, depthCtxStr, depthStr, minSpikes, minAmp, brainRegion)
 % 
 % function to generate neural firing rate time series from a set of
 % timestamps. Will bin acorrding to binSize and convolve with a guassian
@@ -10,12 +10,13 @@ function calcFiringRates(baseRecordingFolder, binSize, gaussStd, depthCtxStr, de
 % neurons with really low spikes (set by minSpikes, default 100) or really
 % low waveform amplitudes (set by minAmp, default 0.3)
 
-load(fullfile(baseRecordingFolder,'ProcessedData','VideoSyncFrames.mat'))
-load(fullfile(baseRecordingFolder,'ProcessedData','neuronDataStruct.mat'))
-load(fullfile(baseRecordingFolder,'Neuropixels','artifactTimestamps.mat'))
+filePaths = getMouseDataNames(recordingSession(1:4),recordingSession,brainRegion);
+load(filePaths.VideoSyncFrames)
+load(filePaths.neuronDataStruct)
+load(filePaths.npArtifactTimestamps)
 
 maxSamples = frameNeuropixelSamples{1}{end}(end);
-
+neuronDataStruct = neuronDataStruct;
 if isempty(depthCtxStr)
     depthCtxStr = 2600; %in mm
 end
@@ -48,7 +49,7 @@ rejectedNeurons = unique([find(cellfun(@length,{neuronDataStruct.timeStamps})<10
 
 % segment into cortex and striatum
 cortexInds = setdiff(find([neuronDataStruct.depth] > depthCtxStr), rejectedNeurons);
-striatumInds = setdiff(find([neuronDataStruct.depth] < depthCtxStr & [neuronDataStruct.depth] > depthStr), rejectedNeurons);
+striatumInds = setdiff(find([neuronDataStruct.depth] <= depthCtxStr & [neuronDataStruct.depth] >= depthStr), rejectedNeurons);
 cortexFRs = smoothedFRs(cortexInds,:);
 striatumFRs = smoothedFRs(striatumInds,:);
 smoothedFRs(rejectedNeurons,:)=[];
@@ -68,7 +69,13 @@ striatumFRs(:,artifactBins) = nan;
 allFRs(:,artifactBins) = nan;
 
 % save
-save(fullfile(baseRecordingFolder,'ProcessedData',['NeuralFiringRates' num2str(binSize) 'msBins' num2str(gaussStd) 'msGauss']),...
+if isempty(brainRegion)
+    appendSuffix = '';
+else
+    appendSuffix = ['_' brainRegion];
+end
+
+save(fullfile(filePaths.processedDataFolder,['NeuralFiringRates' num2str(binSize) 'msBins' num2str(gaussStd) 'msGauss' appendSuffix]),...
     'cortexFRs','striatumFRs','allFRs','noNanFRs','cortexInds','striatumInds','rejectedNeurons',"-v7.3")
 
 
