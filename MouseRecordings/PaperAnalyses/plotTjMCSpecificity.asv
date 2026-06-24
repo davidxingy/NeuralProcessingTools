@@ -1,0 +1,144 @@
+clear
+close all
+
+sessionNames = {'D020-062922-ArenaRecording','D024-111022-ArenaRecording','D026-032923-ArenaRecording',... %D026
+    'D050-120925-ArenaRecording','D050-121825-ArenaRecording','D050-120625-ArenaRecording','D050-120525-ArenaRecording',... %D050
+    'D054-011626-ArenaRecording','D054-012126-ArenaRecording','D054-011326-ArenaRecording','D054-012426-ArenaRecording',... %D054
+    'D056-012726-ArenaRecording','D056-020926-ArenaRecording','D056-012926-ArenaRecording','D056-013126-ArenaRecording'};
+
+
+allBehvAlignPerms = [
+    1 2 3 4 5 6 7; ...
+    1 2 3 4 5 6 7; ...
+    1 2 3 4 5 6 7; ...
+    1 2 3 4 5 6 7; ...
+    1 2 3 4 5 6 7 ...
+    ];
+
+sessionHasTjMC = [0 0 0, ...
+    0 1 0 0, ...
+    0 1 0 0, ...
+    0 0 0 0];
+
+behvRegionLabels = {'Climb Up','Climb Down','Jump Down/Across','Walk Flat/Grid','Rearing/Still','Grooming','Eating'};
+binSize = 10;
+
+for iSess = 1:length(sessionNames)
+
+    recordingSites = {'CFA','tjMC'};
+
+    if sessionHasTjMC(iSess)
+        nSites = 2;
+        siteFieldNames = {{'ctx','str'},{'tjMC'}};
+    else
+        nSites = 1;
+        siteFieldNames = {{'ctx','str'}};
+    end
+
+    for iSite = 1:nSites
+        filePaths = getMouseDataNames(sessionNames{iSess}(1:4),sessionNames{iSess},recordingSites{iSite});
+
+        load(filePaths.NeuronRegionProps)
+        load(filePaths.NeuralFiringRates10msBins30msGauss, 'cortexInds', 'striatumInds','cortexFRs','striatumFRs')
+        load(filePaths.UMAPFile, 'regionBehvAssignments','analyzedBehaviors')
+        load(filePaths.neuronDataStruct)
+
+        maxStrFRs{iSess} = max(striatumFRs,[],2);
+        stdStrFRs{iSess} = nanstd(striatumFRs,[],2);
+        maxCtxFRs{iSess} = max(cortexFRs,[],2);
+        stdCtxFRs{iSess} = nanstd(cortexFRs,[],2);
+
+        allInds = [striatumInds cortexInds];
+        depths = [neuronDataStruct(allInds).depth];
+
+        % load in neural selectivity metrics
+        regionAveFRs = regionAveSigs;
+        regionAveFRsShuff = regionAveSigsShuff(:,:,1:100);
+        sparsityFRs = sparsity;
+        sparsityFRsShuff = sparsityShuff;
+
+
+        % get the names associated with each region
+        nRegions = size(regionAveFRs,2);
+        for iRegion = 1:nRegions
+            regionBehvNames{iSess,iRegion} = string(join(analyzedBehaviors(regionBehvAssignments{iRegion}),'/'));
+        end
+
+        % keep track of which neurons are interneurons
+        strPeakToValleyCutoff = 12.45;
+        ctxPeakToValleyCutoff = 11.25;
+        isInterneuron.str{iSess} = [neuronDataStruct(striatumInds).peakToValley] < strPeakToValleyCutoff;
+        isInterneuron.ctx{iSess} = [neuronDataStruct(cortexInds).peakToValley] < ctxPeakToValleyCutoff;
+
+        % get multibehavior specificity for each neuron
+        % do it for for all recording regions
+        fieldNames = siteFieldNames{iSite};
+        for iType = 1:length(fieldNames)
+
+            if iType == 1
+                neurInds = length(striatumInds)+1:size(regionAveFRs,1);
+            elseif iType == 2
+                neurInds = 1:length(striatumInds);
+            end
+
+            regionAveVals.(fieldNames{iType}){iSess} = regionAveFRs(neurInds,:);
+            regionAveValsShuff.(fieldNames{iType}){iSess} = regionAveFRsShuff(neurInds,:,:);
+
+            sparsityVals.(fieldNames{iType}){iSess} = sparsityFRs(neurInds);
+            sparsityValsShuff.(fieldNames{iType}){iSess} = sparsityFRsShuff(neurInds,:);
+
+            regionMaxFRs.(fieldNames{iType}){iSess} = max(regionAveVals.(fieldNames{iType}){iSess},[],2);
+
+            multiBehvSpec.(fieldNames{iType}){iSess} = sqrt(sum((regionAveVals.(fieldNames{iType}){iSess}./sum(regionAveVals.(fieldNames{iType}){iSess},2)).^2,2));
+            multiBehvSpecShuff.(fieldNames{iType}){iSess} = squeeze(sqrt(sum((regionAveValsShuff.(fieldNames{iType}){iSess}./sum(regionAveValsShuff.(fieldNames{iType}){iSess},2)).^2,2)));
+
+            % correct for low firing rate neurons
+            allMultiBehvSpecCorrected.(fieldNames{iType}){iSess} = multiBehvSpec.(fieldNames{iType}){iSess} - nanmean(multiBehvSpecShuff.(fieldNames{iType}){iSess},2);
+
+            %calc CDF for the multibehavioral selectivity
+            multiSpecCdfVals = 0.3:0.01:1;
+            goodNeurons = regionMaxFRs.(fieldNames{iType}){iSess}>0.2;
+            multispecToUse.(fieldNames{iType}){iSess} = multiBehvSpec.(fieldNames{iType}){iSess}(goodNeurons);
+            multiSpecCdfFreq.(fieldNames{iType}){iSess} = calcCDF(multispecToUse.(fieldNames{iType}){iSess},multiSpecCdfVals);
+
+            % get multibehavior spec shuffle values
+            catMultiBehvSpecShuff.(fieldNames{iType}){iSess} = reshape(multiBehvSpecShuff.(fieldNames{iType}){iSess}(goodNeurons,:), 1, []);
+
+            % also get CDF for sparsity metric
+            sparsityCdfVals = 0:0.01:1;
+            sparsityToUse.(fieldNames{iType}){iSess} = sparsityVals.(fieldNames{iType}){iSess}(goodNeurons);
+            sparsityCdfFreq.(fieldNames{iType}){iSess} = calcCDF(sparsityToUse.(fieldNames{iType}){iSess},sparsityCdfVals);
+
+            % get values of the shuffle/permutation for sparsity too
+            catSparsityShuff.(fieldNames{iType}){iSess} = reshape(sparsityValsShuff.(fieldNames{iType}){iSess}(goodNeurons,:), 1, []);
+
+            %as an alternative for single behavior spec, use statistical
+            %approach to determine modulation of behavior
+            shuffMean = mean(regionAveValsShuff.(fieldNames{iType}){iSess},3);
+            shuffStd = std(regionAveValsShuff.(fieldNames{iType}){iSess},[],3);
+            modulation.(fieldNames{iType}){iSess} = regionAveVals.(fieldNames{iType}){iSess} >= shuffMean + 3*shuffStd;
+            for iRegion = 1:7
+                regionSpec.(fieldNames{iType}){iSess}(:,iRegion) = modulation.(fieldNames{iType}){iSess}(:,iRegion) & ~any(modulation.(fieldNames{iType}){iSess}(:,setdiff(1:7,iRegion)),2);
+            end
+
+        end
+
+    end
+
+end
+
+
+
+function freq = calcCDF(inputData,range)
+
+% remove nans
+inputData(isnan(inputData)) = [];
+
+for i = 1:length(range)
+
+    freq(i) = sum(inputData <= range(i)) / length(inputData);
+
+end
+
+end
+

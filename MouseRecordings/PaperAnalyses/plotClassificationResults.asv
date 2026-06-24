@@ -1,0 +1,231 @@
+clear; close all
+
+load('X:\David\AnalysesData\UMAPClassificationAnalysis.mat')
+
+behvRegionLabels = {'Climb Up','Climb Down','Misc/Jump','Walk','Misc/Rearing/Still','Groom','Eat'};
+
+% first make confusion matrices
+exampleSess = 1;
+realClasses = cat(2,testLabels{exampleSess,:});
+classLabels = unique(realClasses);
+strPredClasses = cat(1,strPredLabels{exampleSess,:})';
+ctxPredClasses = cat(1,ctxPredLabels{exampleSess,:})';
+
+for iClass = 1:length(classLabels)
+
+    realClassInds = find(realClasses==classLabels(iClass));
+    thisClassStrPreds = strPredClasses(realClassInds);
+    thisClassCtxPreds = ctxPredClasses(realClassInds);
+    classNPoints(iClass) = length(realClassInds);
+
+    for iClassCross = 1:length(classLabels)
+
+        strConfMat(iClass,iClassCross) = sum(thisClassStrPreds==classLabels(iClassCross))/length(realClassInds);
+        ctxConfMat(iClass,iClassCross) = sum(thisClassCtxPreds==classLabels(iClassCross))/length(realClassInds);
+
+    end
+
+end
+
+figure('color','w')
+tiledlayout(1,2,"TileSpacing",'tight','Padding','tight')
+
+confMats{1} = strConfMat;
+confMats{2} = ctxConfMat;
+
+for iRegion = 1:length(confMats)
+
+    nexttile
+    imagesc(confMats{iRegion})
+    colormap hot
+    hold on
+    for iClass = 1:length(classLabels)
+        accuracy = num2str(round(confMats{iRegion}(iClass,iClass)*100)/100);
+        if iClass==3
+            textColor = 'w';
+        else
+            textColor = 'k';
+        end
+        text(iClass-0.45,iClass,accuracy,'Color',textColor)
+    end
+    box off
+    clim([0 1])
+    cH = colorbar;
+    cH.Label.String = 'Accuracy';
+
+    set(gca,'XTick',1:length(classLabels))
+    set(gca,'YTick',1:length(classLabels))
+    set(gca,'XTickLabel',behvRegionLabels)
+    set(gca,'YTickLabel',behvRegionLabels)
+    set(gca,'TickDir','out')
+    set(gca,'FontSize',13)
+
+    xlabel('Predicted Class')
+    ylabel('Real Class')
+
+end
+
+% plot example time traces
+figure('color','w')
+tiledlayout(1,5)
+plotColors = turbo(7);
+exampleAnimal = 2;
+% exampleTimes = 16720:17120;
+exampleTimes = 6720:7120;
+realLabels = cat(2,testLabels{exampleAnimal,:})';
+predLabelsStr = cat(1,strPredLabels{exampleAnimal,:});
+predLabelsCtx = cat(1,ctxPredLabels{exampleAnimal,:});
+predLabelsStrShift = cat(1,strPredLabelsShift{exampleAnimal,:,1});
+predLabelsCtxShift = cat(1,ctxPredLabelsShift{exampleAnimal,:,1});
+
+classLabels = unique(realLabels);
+
+plotLabels = {realLabels(exampleTimes), predLabelsStr(exampleTimes), predLabelsStrShift(exampleTimes), ...
+    predLabelsCtx(exampleTimes), predLabelsCtxShift(exampleTimes)};
+
+for iPlot = 1:length(plotLabels)
+    nexttile
+    hold on
+    thisPlotLabels = plotLabels{iPlot};
+    for iClass = 1:length(classLabels)
+        classInds = find(thisPlotLabels==classLabels(iClass));
+
+        if isempty(classInds)
+            continue
+        end
+        boutTransitions = find(diff(classInds)~=1);
+        boutStarts = [classInds(1); classInds(boutTransitions+1)]-1;
+        boutEnds = [classInds(boutTransitions); classInds(end)];
+
+        for iBout = 1:length(boutStarts)
+
+            patch([0 1 1 0],[repmat(boutStarts(iBout),1,2) repmat(boutEnds(iBout),1,2)],plotColors(iClass,:),'edgeColor','none')
+
+        end
+
+    end
+    ylim([0 400])
+    axis off
+end
+
+line([0 0],[0 50],'color','k')
+
+
+% plot overall classification results
+figure;
+plotColors = lines(2);
+scatterData{1} = strAccuracy(:,1);
+scatterData{2} = ctxAccuracy(:,1);
+
+plotJitter = [-0.1 -0.05 0 0.05 0.1];
+barScatterPlot(scatterData,'none',ones(1,2),repmat({plotJitter},1,2),[],true);
+set(gca,'xtick',1:2)
+set(gca,'xticklabels',{'Striatum','Cortex'})
+xlim([0.5 2.5])
+ylim([0 1])
+
+% add the controls
+controlJitter = randn(1,size(strAccuracyShift,2))/500;
+hold on
+for iAnimal = 1:size(strAccuracyShift,1)
+    % first do cortex
+    plotH = scatter(controlJitter+plotJitter(iAnimal)+1,strAccuracyShift(iAnimal,:),10,plotColors(2,:),'filled');
+    alpha(plotH,0.2)
+    % then striatum
+    plotH = scatter(controlJitter+plotJitter(iAnimal)+2,ctxAccuracyShift(iAnimal,:),10,plotColors(1,:),'filled');
+    alpha(plotH,0.2)
+end
+
+ylabel('Classifier Accuracy')
+
+set(gca,'LineWidth',0.5)
+set(gca,'TickDir','out')
+set(gca,'TickLength',[0.02 0.05])
+set(gca,'FontSize',6.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'Color','w')
+
+% plot classification vs lag results
+figure;
+hold on
+plot(lags*0.1,mean(strAccuracy),'color',[plotColors(2,:)],'linewidth',2)
+plot(lags*0.1,strAccuracy','color',[plotColors(2,:) 0.2],'linewidth',1)
+plot(lags*0.1,mean(ctxAccuracy),'color',[plotColors(1,:)],'linewidth',2)
+plot(lags*0.1,ctxAccuracy','color',[plotColors(1,:) 0.2],'linewidth',1)
+
+xlim([0 4])
+ylim([0.4 0.85])
+set(gca,'LineWidth',0.5)
+set(gca,'TickDir','out')
+set(gca,'TickLength',[0.02 0.05])
+set(gca,'FontSize',6.5)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'Color','w')
+
+ylabel('Classifier Accuracy')
+xlabel('Lag (s)')
+
+% do PCA histograms
+tmp = cellfun(@(x) x(:),pcaProjCombRegionsStr,'UniformOutput',0);
+strCombWeights = cat(1,tmp{:});
+
+tmp = cellfun(@(x) x(:),pcaProjCombRegionsCtx,'UniformOutput',0);
+ctxCombWeights = cat(1,tmp{:});
+
+tmp = cellfun(@(x) x(:),pcaProjStr,'UniformOutput',0);
+strIndividualWeights = cat(1,tmp{:});
+        
+tmp = cellfun(@(x) x(:),pcaProjCtx,'UniformOutput',0);
+ctxIndividualWeights = cat(1,tmp{:});
+
+strHistCounts = histcounts(strIndividualWeights,-1:0.01:1)/length(strIndividualWeights);
+ctxHistCounts = histcounts(ctxIndividualWeights,-1:0.01:1)/length(ctxIndividualWeights);
+
+plotColors = lines(2);
+
+bH = bar(-1:0.01:0.99,ctxHistCounts,1);
+bH.FaceAlpha = 0.6;
+bH.FaceColor = plotColors(1,:);
+hold on
+bH = bar(-1:0.01:0.99,strHistCounts,1);
+bH.FaceAlpha = 0.6;
+bH.FaceColor = plotColors(2,:);
+
+xlim([-0.3 0.3])
+ylabel('Fraction of Weights')
+xlabel('PCA Weight')
+box off
+set(gca,'LineWidth',1.5)
+set(gca,'TickDir','out')
+set(gca,'FontSize',13)
+set(gca,'XColor','k')
+set(gca,'YColor','k')
+set(gcf,'Color','w')
+
+% calculate sparsity of the weights as the L1 norm of the weights
+for iSess = 1:size(pcaProjStr)
+    for iRegion = 1:size(pcaProjStr,2)
+
+        nDimsStr(iSess,iRegion) = length(varExpStr{iSess,iRegion});% find(cumsum(varExpStr{iSess,iRegion})/sum(varExpStr{iSess,iRegion})>0.9,1);
+        nDimsCtx(iSess,iRegion) = length(varExpCtx{iSess,iRegion});%find(cumsum(varExpCtx{iSess,iRegion})/sum(varExpCtx{iSess,iRegion})>0.9,1);
+
+        directSparse = sum(abs(pcaProjStr{iSess,iRegion}(:,1:nDimsStr(iSess,iRegion))));
+        strWeightsSpars{iSess,iRegion} = (directSparse-1)/(sqrt(length(varExpStr{iSess,iRegion}))-1);
+        directSparse = sum(abs(pcaProjCtx{iSess,iRegion}(:,1:nDimsCtx(iSess,iRegion))));
+        ctxWeightsSpars{iSess,iRegion} = (directSparse-1)/(sqrt(length(varExpCtx{iSess,iRegion}))-1);
+
+    end
+end
+
+strWeightsSparsAll = cat(2,strWeightsSpars{:});
+ctxWeightsSparsAll = cat(2,ctxWeightsSpars{:});
+
+bar([mean(strWeightsSparsAll) mean(ctxWeightsSparsAll)])
+hold on
+errorbar([mean(strWeightsSparsAll) mean(ctxWeightsSparsAll)],[std(strWeightsSparsAll)/sqrt(length(strWeightsSparsAll)) std(ctxWeightsSparsAll)/sqrt(length(ctxWeightsSparsAll))],'.','Marker','none')
+xlim([0 3])
+ylim([0 1])
+
+% 
