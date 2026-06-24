@@ -77,8 +77,10 @@ else
     nResamp = 500;
 end
 
+makePlots = true;
 rng(2025)
 useHumanAnnoBouts = false;
+minLabelPoints = 10000; %Don't limit number of points for calculating things within behaviors to less than this value
 
 filePaths = getMouseDataNames(sessionName(1:4),sessionName,sessionProbe);
 
@@ -116,7 +118,10 @@ sessionArtifacts = consolidateArtifactInds(sessionName, sessionProbe);
 artInds = sessionArtifacts.allArtNeurInds10ms30msSmooth;
 artInds(artInds > maxNeurSamples) = [];
 
-removePoints = find(ismember(reducNeurInds,artInds));
+% also see if there are any nans in reducNeurInds, which may arise from
+% D024 since there was some issue with the syncing
+
+removePoints = unique([find(ismember(reducNeurInds,artInds)) find(isnan(reducNeurInds))]);
 reducIndsToUse(removePoints) = [];
 
 if ~isdir(fullfile(filePaths.processedDataFolder,saveResultsDir))
@@ -258,15 +263,15 @@ end
 
 allUsedLabelIds = {regionWatershedLabelsCat, 1:10, 1:8};
 
-% loop through each behavior label type
-behvAveSigs = [];
-behvPrctSigs = [];
-behvAveSigsResamp = [];
-behvPrctSigsResamp = [];
-behvAveSigsShuff = [];
-behvPrctSigsShuff = [];
-
 for iLabelType = 1:length(allUsedLabels)
+    
+    % loop through each behavior label type
+    behvAveSigs = [];
+    behvPrctSigs = [];
+    behvAveSigsResamp = [];
+    behvPrctSigsResamp = [];
+    behvAveSigsShuff = [];
+    behvPrctSigsShuff = [];
 
     usedLabels = allUsedLabels{iLabelType};
 
@@ -289,7 +294,6 @@ for iLabelType = 1:length(allUsedLabels)
             end
 
             itrReducSigs = circshift(reducSigs,randShift(iShuff-1),2);
-            reducSigsShuff = circshift(reducSigs,randShift(iShuff-1),2);
 
             % instead of doing time shifting, actually permute the indices for
             % calculating controls for sparsity (since shifting relative to
@@ -324,7 +328,7 @@ for iLabelType = 1:length(allUsedLabels)
                 spaceAveZScoresFilt = fftshift(real(ifft2(fft2(gaussKernal).*fft2(spaceAveZScores))));
                 allChansFiltData(:,:,iChan) = spaceAveZScoresFilt;
 
-                if iShuff == 1
+                if iShuff == 1 && makePlots
                     %don't need to plot perm shuffles
                     figH = figure('Visible','on','Units','pixels','OuterPosition',[200 50 500 1000]);
                     tiledlayout(2,1,"TileSpacing","tight")
@@ -349,7 +353,19 @@ for iLabelType = 1:length(allUsedLabels)
             for iBehv = 1:length(usedLabelIds)
                 regionNPoints(iBehv) = sum(reducUsedLabels == usedLabelIds(iBehv));
             end
-            regionMinPoints = min(regionNPoints);
+            
+            % for the classifier labels, there are some behaviors where
+            % there are very few (or even no) points (mostly
+            % jumping/jumpdown). Since I don't want to negatively influence
+            % the firing rate calculations for all the other behaviors by
+            % limiting them to such a small number of points, use a minimum
+            % of minLabelPoints (default will use 10000, or 10s of data), 
+            % and if any label types have less then those points, use all
+            % of the points for that label type, and then save a variable
+            % indicating that they have different points in the
+            % calculations to inform future analyses and results.
+            behvsLessThanMinPoints{iLabelType} = find(regionNPoints < minLabelPoints);
+            regionMinPoints = min(regionNPoints(regionNPoints >= minLabelPoints));
 
             % use human annotated labels to get bouts for estimating
             % intra-behavior variance
@@ -386,6 +402,14 @@ for iLabelType = 1:length(allUsedLabels)
                 
                 itrReducInds = find(reducUsedLabels == usedLabelIds(iBehv));
 
+                if isempty(itrReducInds)
+                    thisBehvRegionBlockMeans{iBehv} = [];
+                    behvBoutDurs(iBehv) = 0;
+                    behvBoutLabels{iBehv} = [];
+                    behvBoutAveSigs{iChan,iBehv} = [];
+                    continue
+                end
+                
                 % get bouts
                 boutStarts = itrReducInds([1 find(diff(itrReducInds) > 1)+1]);
                 boutEnds = itrReducInds([find(diff(itrReducInds) > 1) length(itrReducInds)]);
@@ -393,7 +417,7 @@ for iLabelType = 1:length(allUsedLabels)
 
                 % for resample do resampling of continuous blocks
                 bootStrapBlockDur = 500;
-                doBlockResamp = true;
+                doBlockResamp = false;
                 behvBoutRegionMeans = {};
                 for iBout = 1:length(boutStarts)
                     if boutDurations(iBout) < bootStrapBlockDur
@@ -430,13 +454,20 @@ for iLabelType = 1:length(allUsedLabels)
 
             end % of behaviors loop for calculating bouts
 
-            regionMinBlocks = min(cellfun(@length,thisBehvRegionBlockMeans));
+            % for subsampling blocks too, don't use the behavior labels
+            % that have less than the minimum number of points
+            goodBehvsRegionBlockMeans = thisBehvRegionBlockMeans;
+            goodBehvsRegionBlockMeans(behvsLessThanMinPoints{iLabelType}) = [];
+            regionMinBlocks = min(cellfun(@length,goodBehvsRegionBlockMeans));
 
             for iBehv = 1:length(usedLabelIds)
                 %if we want to downsample to same number of points across behavior
                 %regions, do it now
                 itrReducInds = find(reducUsedLabels == usedLabelIds(iBehv));
-                if doSubsamp
+                
+                %don't subsample for the behavior labels that have less
+                %than the minimum number of points
+                if doSubsamp && all(iBehv ~= behvsLessThanMinPoints{iLabelType})                        
                     randDownsampInds = randperm(length(itrReducInds),regionMinPoints);
                     itrReducInds = itrReducInds(randDownsampInds);
                     thisBehvRegionBlockMeans{iBehv} = thisBehvRegionBlockMeans{iBehv}(...
@@ -557,7 +588,7 @@ for iLabelType = 1:length(allUsedLabels)
                 end
 
                 % add to plots
-                if iShuff == 1
+                if iShuff == 1 && makePlots
 
                     % naming scheme
                     switch lower(activityType)
@@ -629,6 +660,7 @@ for iLabelType = 1:length(allUsedLabels)
         regionPrctSigsResamp = behvPrctSigsResamp;
         regionAveSigsShuff = behvAveSigsShuff;
         regionPrctSigsShuff = behvPrctSigsShuff;
+        regionsLessThanMinPoints = behvsLessThanMinPoints{iLabelType};
     elseif iLabelType == 2
         classifierAveSigs = behvAveSigs;
         classifierPrctSigs = behvPrctSigs;
@@ -636,6 +668,7 @@ for iLabelType = 1:length(allUsedLabels)
         classifierPrctSigsResamp = behvPrctSigsResamp;
         classifierAveSigsShuff = behvAveSigsShuff;
         classifierPrctSigsShuff = behvPrctSigsShuff;
+        classifierLessThanMinPoints = behvsLessThanMinPoints{iLabelType};
     elseif iLabelType == 3
         emgPercentileAveSigs = behvAveSigs;
         emgPercentilePrctSigs = behvPrctSigs;
@@ -643,6 +676,7 @@ for iLabelType = 1:length(allUsedLabels)
         emgPercentilePrctSigsResamp = behvPrctSigsResamp;
         emgPercentileAveSigsShuff = behvAveSigsShuff;
         emgPercentilePrctSigsShuff = behvPrctSigsShuff;
+        emgPercentileLessThanMinPoints = behvsLessThanMinPoints{iLabelType};
     end
 
 end % of loop across behavior label types
@@ -705,7 +739,8 @@ end % of loop across behavior label types
 commonSaveVars = {'regionAveSigs','regionPrctSigs','regionAveSigsFilt','regionPrctSigsFilt','umapRegionReducInds','classifierReducInds'...
     'regionAveSigsShuff','regionPrctSigsShuff','regionAveSigsFiltShuff','regionPrctSigsFiltShuff','sparsity','sparsityShuff',...
     'classifierAveSigs','classifierPrctSigs','classifierAveSigsShuff','classifierPrctSigsShuff','emgPercentileReducInds',...
-    'emgPercentileAveSigs','emgPercentilePrctSigs','emgPercentileAveSigsShuff','emgPercentilePrctSigsShuff'};
+    'emgPercentileAveSigs','emgPercentilePrctSigs','emgPercentileAveSigsShuff','emgPercentilePrctSigsShuff',...
+    'regionsLessThanMinPoints','classifierLessThanMinPoints','emgPercentileLessThanMinPoints'};
 
 switch lower(activityType)
     case 'firingrate'
@@ -745,6 +780,9 @@ end
 
 if ~isempty(saveResultsDir)
     save(fullfile(filePaths.processedDataFolder,saveResultsDir,outputFileName),commonSaveVars{:},extraSaveVars{:});
+%     save(fullfile(filePaths.processedDataFolder,saveResultsDir,outputFileName),...
+%         'regionAveSigsResamp','regionPrctSigsResamp','classifierAveSigsResamp','classifierPrctSigsResamp',...
+%         'emgPercentileAveSigsResamp','emgPercentilePrctSigsResamp','-append')
 end
 
 
