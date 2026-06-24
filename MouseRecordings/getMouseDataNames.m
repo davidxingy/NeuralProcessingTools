@@ -6,7 +6,7 @@ function dataNames = getMouseDataNames(mouseID,baseSessionName,probeRegion)
 % conventions have been changing, this function serves as a map to get the
 % different processed data files associated with each animal
 
-validMice = {'D020','D024','D026','D043','D047','D050','D054','D056'};
+validMice = {'D020','D024','D026','D036','D040','D041','D043','D047','D050','D054','D056'};
 
 % check the mouse ID is valid
 assert(any(strcmp(validMice,mouseID)),'mouseID input does not match any of the valid mice!')
@@ -80,7 +80,9 @@ dataNames.neuronDataStruct = fullfile(dataNames.processedDataFolder,['neuronData
 
 % the current possible firing rate files that I could've generated:
 firingRateFileNames = {'NeuralFiringRates1msBins0msGauss','NeuralFiringRates1msBins10msGauss',...
-    'NeuralFiringRates5msBins30msGauss','NeuralFiringRates10msBins30msGauss','NeuralFiringRates100msBins50msGauss'};
+    'NeuralFiringRates5msBins30msGauss','NeuralFiringRates5msBins0msGauss',...
+    'NeuralFiringRates10msBins30msGauss','NeuralFiringRates10msBins0msGauss',...
+    'NeuralFiringRates100msBins50msGauss','NeuralFiringRates100msBins0msGauss'};
 
 for iFRType = 1:length(firingRateFileNames)
     dataNames.(firingRateFileNames{iFRType}) = fullfile(dataNames.processedDataFolder,[firingRateFileNames{iFRType} appendSuffix]);
