@@ -46,7 +46,7 @@ nSegs = ceil(totSamps/segLength);
 
 % open file for reading
 readFid = fopen(fullfile(binDIR, binFilename), 'rb');
-writeFid = fopen(fullfile(binDIR, newBinFilename), 'wb');
+writeFid = fopen(fullfile('C:\Users\david\OneDrive\Documents\GlobusTransfer', newBinFilename), 'wb');
 
 % save plots
 if savePlots
@@ -213,15 +213,23 @@ for iSeg = 1:nSegs
         artifactWindows = findNoiseArtifacts(dataArray(1:end-1,:),noiseParameters);
         artifactWindowsInds = find(artifactWindows);
 
-        %make sure no artifacts
+        %make sure no artifacts in the replacement data
         baselineSize = max([noiseParameters.preSamplesToRemoveNoiseStd,noiseParameters.preSamplesToRemoveNoiseValue]) + ...
             max([noiseParameters.postSamplesToRemoveNoiseStd,noiseParameters.postSamplesToRemoveNoiseValue]);
-        if any(artifactWindowsInds < baselineSize)
-            warning('Baseline has artifact, aborting')
-            return
+        baselineStart = 1;
+        while ~isempty(intersect(artifactWindowsInds,baselineStart:baselineStart + baselineSize))
+            warning('Baseline has artifact, getting next section')
+            baselineStart = baselineStart + baselineSize - 1;
+
+            if baselineStart + baselineSize - 1 >= size(dataArray,2)
+                warning('Unable to get clean baseline, aborting')
+                return
+            end
+
         end
 
-        baselineData = dataArray(1:end-1,1:baselineSize);
+        % get replacement data
+        baselineData = dataArray(1:end-1,baselineStart:baselineStart+baselineSize-1);
 
     end
     
