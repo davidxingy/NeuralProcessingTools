@@ -13,16 +13,16 @@ allBehvAlignPerms = [
     ];
 
 inputData = 'umapregions';
-binSize = 100;
-useSmoothed = false;
+binSize = 10;
+useSmoothed = true;
 runCCA = false;
-runPCA = false;
-runDyn = true;
+runPCA = true;
+runDyn = false;
 runPLDS = false;
 runSubregions = true;
 subBehvMinPoints = 30000/binSize;
 nShifts = 100;
-runDimCalc = false;
+runDimCalc = true;
 minLabelPoints = 30000/binSize; %Don't limit number of points for calculating things within behaviors to less than this value
 
 dynNoId = false;
@@ -1218,7 +1218,7 @@ end % of sessions loop
 commonSaveVars = {'binSize','useSmoothed','shiftAmount','subBehvMinPoints','behvsLessThanMinPoints','nShifts',...
     'minLabelPoints','labelTypeNames','goodSubregions','timeIndsToUse','shiftTimeIndsToUse'};
 
-saveVarsPCA = {'pcaProjStr','varExpStr','pcaProjCtx','varExpCtx','pcaProjEmg','varExpEmg','paDim',
+saveVarsPCA = {'pcaProjStr','varExpStr','pcaProjCtx','varExpCtx','pcaProjEmg','varExpEmg','paDim',...
     'pcaProjStrShift','pcaProjCtxShift','pcaProjEmgShift','paDimShift','subTimeIndsToUse',...
     'pcaProjSubStr','varExpSubStr','pcaProjSubCtx','varExpSubCtx','pcaProjSubEmg','varExpSubEmg','paDimSub',...
     'pcaDiverStr','pcaAlignStr','pcaAngleStr','pcaDiverCtx','pcaAlignCtx','pcaAngleCtx','pcaDiverEmg','pcaAlignEmg','pcaAngleEmg',...
@@ -1945,21 +1945,44 @@ for iBehv1 = 1:nBehvs
 
             if runPCA
 
-                [pcaDiverStr(iBehv1,iBehv2), pcaAlignStr(iBehv1,iBehv2), pcaAngleStr(iBehv1,iBehv2)] = ...
-                    calcPCAAlignment(behvFRs{iBehv1}(goodNeuronsStr,timeIndsToUse{iBehv1})',...
-                    behvFRs{iBehv2}(goodNeuronsStr,timeIndsToUse{iBehv2})',pcaProjStr{iBehv1},pcaProjStr{iBehv2},...
-                    paDim(iBehv1,1),paDim(iBehv2,1),makeExamplePlot);
-
-                [pcaDiverCtx(iBehv1,iBehv2), pcaAlignCtx(iBehv1,iBehv2), pcaAngleCtx(iBehv1,iBehv2)] = ...
-                    calcPCAAlignment(behvFRs{iBehv1}(goodNeuronsCtx,timeIndsToUse{iBehv1})',...
-                    behvFRs{iBehv2}(goodNeuronsCtx,timeIndsToUse{iBehv2})',pcaProjCtx{iBehv1},pcaProjCtx{iBehv2},...
-                    paDim(iBehv1,2),paDim(iBehv2,2),makeExamplePlot);
-
-                [pcaDiverEmg(iBehv1,iBehv2), pcaAlignEmg(iBehv1,iBehv2), pcaAngleEmg(iBehv1,iBehv2)] = ...
-                    calcPCAAlignment(behvEMGs{iBehv1}(:,timeIndsToUse{iBehv1})',...
-                    behvEMGs{iBehv2}(:,timeIndsToUse{iBehv2})',pcaProjEmg{iBehv1},pcaProjEmg{iBehv2},...
-                    paDim(iBehv1,3),paDim(iBehv2,3),false);
-
+                % if there are fewer time points than neurons, it will
+                % cause issues so don't run the alignment in those cases
+                if length(timeIndsToUse{iBehv2}) <= length(goodNeuronsStr) || ...
+                        length(timeIndsToUse{iBehv1}) <= length(goodNeuronsStr)
+                    pcaDiverStr(iBehv1,iBehv2) = nan;
+                    pcaAlignStr(iBehv1,iBehv2) = nan;
+                    pcaAngleStr(iBehv1,iBehv2) = nan;
+                else
+                    [pcaDiverStr(iBehv1,iBehv2), pcaAlignStr(iBehv1,iBehv2), pcaAngleStr(iBehv1,iBehv2)] = ...
+                        calcPCAAlignment(behvFRs{iBehv1}(goodNeuronsStr,timeIndsToUse{iBehv1})',...
+                        behvFRs{iBehv2}(goodNeuronsStr,timeIndsToUse{iBehv2})',pcaProjStr{iBehv1},pcaProjStr{iBehv2},...
+                        paDim(iBehv1,1),paDim(iBehv2,1),makeExamplePlot);
+                end
+                
+                if length(timeIndsToUse{iBehv2}) <= length(goodNeuronsCtx) || ...
+                        length(timeIndsToUse{iBehv1}) <= length(goodNeuronsCtx)
+                    pcaDiverCtx(iBehv1,iBehv2) = nan;
+                    pcaAlignCtx(iBehv1,iBehv2) = nan;
+                    pcaAngleCtx(iBehv1,iBehv2) = nan;
+                else
+                    [pcaDiverCtx(iBehv1,iBehv2), pcaAlignCtx(iBehv1,iBehv2), pcaAngleCtx(iBehv1,iBehv2)] = ...
+                        calcPCAAlignment(behvFRs{iBehv1}(goodNeuronsCtx,timeIndsToUse{iBehv1})',...
+                        behvFRs{iBehv2}(goodNeuronsCtx,timeIndsToUse{iBehv2})',pcaProjCtx{iBehv1},pcaProjCtx{iBehv2},...
+                        paDim(iBehv1,2),paDim(iBehv2,2),makeExamplePlot);
+                end
+                
+                if length(timeIndsToUse{iBehv2}) <= size(behvEMGs{1},1) || ...
+                        length(timeIndsToUse{iBehv1}) <= size(behvEMGs{1},1)
+                    pcaDiverEmg(iBehv1,iBehv2) = nan;
+                    pcaAlignEmg(iBehv1,iBehv2) = nan;
+                    pcaAngleEmg(iBehv1,iBehv2) = nan;
+                else
+                    [pcaDiverEmg(iBehv1,iBehv2), pcaAlignEmg(iBehv1,iBehv2), pcaAngleEmg(iBehv1,iBehv2)] = ...
+                        calcPCAAlignment(behvEMGs{iBehv1}(:,timeIndsToUse{iBehv1})',...
+                        behvEMGs{iBehv2}(:,timeIndsToUse{iBehv2})',pcaProjEmg{iBehv1},pcaProjEmg{iBehv2},...
+                        paDim(iBehv1,3),paDim(iBehv2,3),false);
+                end
+                
             end % of PCA block
 
             if runDyn
