@@ -32,7 +32,7 @@ exampleControl = 2;
 
 rng(2025)
 
-for iSess = 1:length(sessionNames)
+for iSess = 5:length(sessionNames)
 
     filePaths = getMouseDataNames(sessionNames{iSess}(1:4),sessionNames{iSess},'CFA');
     sessionArtifacts = consolidateArtifactInds(sessionNames{iSess},'CFA');
@@ -486,6 +486,8 @@ for iSess = 1:length(sessionNames)
         % now go through each region and run PCA, CCA, and LDS
         for iShift = 1:nShifts+1
 
+            shiftBehvFRs = {};
+
             pcaTrajStr = {};
             pcaTrajCtx = {};
             pcaTrajEmg = {};
@@ -542,13 +544,14 @@ for iSess = 1:length(sessionNames)
 
                     isShift = true;
                     frsData = normalizedFRs(:,behvNeurIndsShift{iBehv,iShift-1});
+                    shiftBehvFRs{iBehv} = frsData; %for this shift, save FR data for computing alignment
                     frsOrigData = allFRs(:,behvNeurIndsShift{iBehv,iShift-1});
                     emgData = behvEMGsShift(:,iShift -1);
 
-                    if leastPoints < size(frsData,2)
-                        shiftTimeIndsToUse{iSess,iLabelType}{iBehv,iShift-1} = randperm(size(frsData,2),leastPoints);
+                    if leastPoints < length(behvNeurIndsShift{iBehv,iShift-1})
+                        shiftTimeIndsToUse{iSess,iLabelType}{iBehv,iShift-1} = randperm(length(behvNeurIndsShift{iBehv,iShift-1}),leastPoints);
                     else
-                        shiftTimeIndsToUse{iSess,iLabelType}{iBehv,iShift-1} = 1:size(frsData,2);
+                        shiftTimeIndsToUse{iSess,iLabelType}{iBehv,iShift-1} = 1:length(behvNeurIndsShift{iBehv,iShift-1});
                     end
 
                     usedTimeInds = shiftTimeIndsToUse{iSess,iLabelType}{iBehv,iShift-1};
@@ -916,11 +919,7 @@ for iSess = 1:length(sessionNames)
             plotExampleInfo.exampleLowDivBehv= exampleLowDivBehv;
             plotExampleInfo.exampleHighDivBehv= exampleHighDivBehv;
             plotExampleInfo.exampleCCATimes = exampleCCATimes;
-            
-
-            inputVars.behvFRs = behvFRs;
-            inputVars.behvEMGs = behvEMGs;
-            inputVars.timeIndsToUse = timeIndsToUse{iSess,iLabelType};
+               
             inputVars.goodNeuronsCtx = goodNeuronsCtx;
             inputVars.goodNeuronsStr = goodNeuronsStr;
             inputVars.nShuffs = nShifts;
@@ -929,8 +928,14 @@ for iSess = 1:length(sessionNames)
 
             if isShift
                 inputVars.runRotShuffs = false;
+                inputVars.timeIndsToUse = shiftTimeIndsToUse{iSess,iLabelType}(:,iShift-1)';
+                inputVars.behvFRs = shiftBehvFRs;
+                inputVars.behvEMGs = behvEMGsShift(:,iShift-1);         
             else
                 inputVars.runRotShuffs = true;
+                inputVars.timeIndsToUse = timeIndsToUse{iSess,iLabelType};
+                inputVars.behvFRs = behvFRs;
+                inputVars.behvEMGs = behvEMGs';
             end
 
             if runCCA
@@ -1254,7 +1259,7 @@ saveVarsDyn = {'dynTimeIndsToUse','dynShiftTimeIndsToUse','dynNoId','dynNoiseStd
     'dynNeursR2ChangeSubCtx','dynNeursR2ChangeSubStr','dynNeursCCChangeSubCtx','dynNeursCCChangeSubStr'};
 
 if runPCA
-    save('X:\David\AnalysesData\PCASubspaces.mat',[commonSaveVars saveVarsPCA],'-v7.3')
+    save('X:\David\AnalysesData\PCASubspaces_Sess5.mat',commonSaveVars{:}, saveVarsPCA{:},'-v7.3')
 end
 
 if runDyn
@@ -1952,11 +1957,13 @@ for iBehv1 = 1:nBehvs
                     pcaDiverStr(iBehv1,iBehv2) = nan;
                     pcaAlignStr(iBehv1,iBehv2) = nan;
                     pcaAngleStr(iBehv1,iBehv2) = nan;
+                    noStrCalc = true;
                 else
                     [pcaDiverStr(iBehv1,iBehv2), pcaAlignStr(iBehv1,iBehv2), pcaAngleStr(iBehv1,iBehv2)] = ...
                         calcPCAAlignment(behvFRs{iBehv1}(goodNeuronsStr,timeIndsToUse{iBehv1})',...
                         behvFRs{iBehv2}(goodNeuronsStr,timeIndsToUse{iBehv2})',pcaProjStr{iBehv1},pcaProjStr{iBehv2},...
                         paDim(iBehv1,1),paDim(iBehv2,1),makeExamplePlot);
+                    noStrCalc = false;
                 end
                 
                 if length(timeIndsToUse{iBehv2}) <= length(goodNeuronsCtx) || ...
@@ -1964,11 +1971,13 @@ for iBehv1 = 1:nBehvs
                     pcaDiverCtx(iBehv1,iBehv2) = nan;
                     pcaAlignCtx(iBehv1,iBehv2) = nan;
                     pcaAngleCtx(iBehv1,iBehv2) = nan;
+                    noCtxCalc = true;
                 else
                     [pcaDiverCtx(iBehv1,iBehv2), pcaAlignCtx(iBehv1,iBehv2), pcaAngleCtx(iBehv1,iBehv2)] = ...
                         calcPCAAlignment(behvFRs{iBehv1}(goodNeuronsCtx,timeIndsToUse{iBehv1})',...
                         behvFRs{iBehv2}(goodNeuronsCtx,timeIndsToUse{iBehv2})',pcaProjCtx{iBehv1},pcaProjCtx{iBehv2},...
                         paDim(iBehv1,2),paDim(iBehv2,2),makeExamplePlot);
+                    noCtxCalc = false;
                 end
                 
                 if length(timeIndsToUse{iBehv2}) <= size(behvEMGs{1},1) || ...
@@ -1976,11 +1985,13 @@ for iBehv1 = 1:nBehvs
                     pcaDiverEmg(iBehv1,iBehv2) = nan;
                     pcaAlignEmg(iBehv1,iBehv2) = nan;
                     pcaAngleEmg(iBehv1,iBehv2) = nan;
+                    noEmgCalc = true;
                 else
                     [pcaDiverEmg(iBehv1,iBehv2), pcaAlignEmg(iBehv1,iBehv2), pcaAngleEmg(iBehv1,iBehv2)] = ...
                         calcPCAAlignment(behvEMGs{iBehv1}(:,timeIndsToUse{iBehv1})',...
                         behvEMGs{iBehv2}(:,timeIndsToUse{iBehv2})',pcaProjEmg{iBehv1},pcaProjEmg{iBehv2},...
                         paDim(iBehv1,3),paDim(iBehv2,3),false);
+                    noEmgCalc = false;
                 end
                 
             end % of PCA block
@@ -2119,28 +2130,81 @@ for iBehv1 = 1:nBehvs
 
                         end
 
+
                         if iShuff == 1
                             %since calculating the pa dimensionality takes so
                             %long, just calculate it once for the first
                             %shuffle, since it doesn't change much across
                             %shuffles anyways
-                            [pcaDiverRotStr(iBehv1,iBehv2,iShuff), pcaAlignRotStr(iBehv1,iBehv2,iShuff), pcaAngleRotStr(iBehv1,iBehv2,iShuff), rotPaDim1Str, rotPaDim2Str] = ...
-                                randomRotationAlignment(rotTrajStr1, rotTrajStr2, rotProjStr1, rotProjStr2,[],[],makeExamplePlotShuff);
 
-                            [pcaDiverRotCtx(iBehv1,iBehv2,iShuff), pcaAlignRotCtx(iBehv1,iBehv2,iShuff), pcaAngleRotCtx(iBehv1,iBehv2,iShuff), rotPaDim1Ctx, rotPaDim2Ctx] = ...
-                                randomRotationAlignment(rotTrajCtx1, rotTrajCtx2, rotProjCtx1, rotProjCtx2,[],[],makeExamplePlotShuff);
+                            % if there are fewer time points than neurons, it will
+                            % cause issues so don't run the alignment in those cases
+                            if noStrCalc
+                                pcaDiverRotStr(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAlignRotStr(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAngleRotStr(iBehv1,iBehv2,iShuff) = nan;
+                                rotPaDim1Str = 4;
+                                rotPaDim2Str = 4;
+                            else
+                                [pcaDiverRotStr(iBehv1,iBehv2,iShuff), pcaAlignRotStr(iBehv1,iBehv2,iShuff), pcaAngleRotStr(iBehv1,iBehv2,iShuff), rotPaDim1Str, rotPaDim2Str] = ...
+                                    randomRotationAlignment(rotTrajStr1, rotTrajStr2, rotProjStr1, rotProjStr2,[],[],makeExamplePlotShuff);
+                            end
 
-                            [pcaDiverRotEmg(iBehv1,iBehv2,iShuff), pcaAlignRotEmg(iBehv1,iBehv2,iShuff), pcaAngleRotEmg(iBehv1,iBehv2,iShuff), rotPaDim1Emg, rotPaDim2Emg] = ...
-                                randomRotationAlignment(rotTrajEmg1, rotTrajEmg2, rotProjEmg1, rotProjEmg2,[],[],false);
+                            if noCtxCalc
+                                pcaDiverRotCtx(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAlignRotCtx(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAngleRotCtx(iBehv1,iBehv2,iShuff) = nan;
+                                rotPaDim1Ctx = 4;
+                                rotPaDim2Ctx = 4;
+                            else
+                                [pcaDiverRotCtx(iBehv1,iBehv2,iShuff), pcaAlignRotCtx(iBehv1,iBehv2,iShuff), pcaAngleRotCtx(iBehv1,iBehv2,iShuff), rotPaDim1Ctx, rotPaDim2Ctx] = ...
+                                    randomRotationAlignment(rotTrajCtx1, rotTrajCtx2, rotProjCtx1, rotProjCtx2,[],[],makeExamplePlotShuff);
+                            end
+
+                            if noEmgCalc
+                                pcaDiverRotEmg(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAlignRotEmg(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAngleRotEmg(iBehv1,iBehv2,iShuff) = nan;
+                                rotPaDim1Emg = 4;
+                                rotPaDim2Emg = 4;
+                            else
+                                [pcaDiverRotEmg(iBehv1,iBehv2,iShuff), pcaAlignRotEmg(iBehv1,iBehv2,iShuff), pcaAngleRotEmg(iBehv1,iBehv2,iShuff), rotPaDim1Emg, rotPaDim2Emg] = ...
+                                    randomRotationAlignment(rotTrajEmg1, rotTrajEmg2, rotProjEmg1, rotProjEmg2,[],[],false);
+                            end
+
                         else
-                            [pcaDiverRotStr(iBehv1,iBehv2,iShuff), pcaAlignRotStr(iBehv1,iBehv2,iShuff), pcaAngleRotStr(iBehv1,iBehv2,iShuff)] = ...
-                                randomRotationAlignment(rotTrajStr1, rotTrajStr2, rotProjStr1, rotProjStr2,rotPaDim1Str,rotPaDim2Str,false);
+                            % not first shuff, used the dimension
+                            % calculated from first shuff
 
-                            [pcaDiverRotCtx(iBehv1,iBehv2,iShuff), pcaAlignRotCtx(iBehv1,iBehv2,iShuff), pcaAngleRotCtx(iBehv1,iBehv2,iShuff)] = ...
-                                randomRotationAlignment(rotTrajCtx1, rotTrajCtx2, rotProjCtx1, rotProjCtx2,rotPaDim1Ctx,rotPaDim2Ctx,false);
+                            % if there are fewer time points than neurons, it will
+                            % cause issues so don't run the alignment in those cases
+                            if noStrCalc
+                                pcaDiverRotStr(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAlignRotStr(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAngleRotStr(iBehv1,iBehv2,iShuff) = nan;
+                            else
+                                [pcaDiverRotStr(iBehv1,iBehv2,iShuff), pcaAlignRotStr(iBehv1,iBehv2,iShuff), pcaAngleRotStr(iBehv1,iBehv2,iShuff)] = ...
+                                    randomRotationAlignment(rotTrajStr1, rotTrajStr2, rotProjStr1, rotProjStr2,rotPaDim1Str,rotPaDim2Str,false);
+                            end
 
-                            [pcaDiverRotEmg(iBehv1,iBehv2,iShuff), pcaAlignRotEmg(iBehv1,iBehv2,iShuff), pcaAngleRotEmg(iBehv1,iBehv2,iShuff)] = ...
-                                randomRotationAlignment(rotTrajEmg1, rotTrajEmg2, rotProjEmg1, rotProjEmg2,rotPaDim1Emg,rotPaDim2Emg,false);
+                            if noCtxCalc
+                                pcaDiverRotCtx(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAlignRotCtx(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAngleRotCtx(iBehv1,iBehv2,iShuff) = nan;
+                            else
+                                [pcaDiverRotCtx(iBehv1,iBehv2,iShuff), pcaAlignRotCtx(iBehv1,iBehv2,iShuff), pcaAngleRotCtx(iBehv1,iBehv2,iShuff)] = ...
+                                    randomRotationAlignment(rotTrajCtx1, rotTrajCtx2, rotProjCtx1, rotProjCtx2,rotPaDim1Ctx,rotPaDim2Ctx,false);
+                            end
+
+                            if noEmgCalc
+                                pcaDiverRotEmg(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAlignRotEmg(iBehv1,iBehv2,iShuff) = nan;
+                                pcaAngleRotEmg(iBehv1,iBehv2,iShuff) = nan;
+                            else
+                                [pcaDiverRotEmg(iBehv1,iBehv2,iShuff), pcaAlignRotEmg(iBehv1,iBehv2,iShuff), pcaAngleRotEmg(iBehv1,iBehv2,iShuff)] = ...
+                                    randomRotationAlignment(rotTrajEmg1, rotTrajEmg2, rotProjEmg1, rotProjEmg2,rotPaDim1Emg,rotPaDim2Emg,false);
+                            end
+
                         end
 
                         % % % now for behavioral label shifts
