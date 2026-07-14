@@ -32,14 +32,6 @@ threshs = { {[0.8 0.8 0.8 0.8 0.8 0.8]}, {[2 0.6 0.8 0.8 0.8 0.8]}, {[0.8 0.8 0.
     {[1.6 1.5 0.8 1.5 2 3], [1.6 0.08 1 1.5 3.5 3.5], [1.6 1.5 1 1.5 2 3], [1.6 1.5 0.8 1.5 2 3]},...
     {[1.8 0.5 3 1.2 1.5 1.2], [1.8 0.5 0.7 1.2 3.5 1.2], [1.8 0.25 3 1 3 1.2], [1.8 0.5 3 1 3 1.2]} };
 
-% thresh = [2 2 1 1.5 2 2];
-% 
-% baselineChanThresh = [1 1 0.5 0.5 1 1];
-
-% baselineChanThresh = [0.5 0.5 0.5 0.5;...
-%                       0.5 0.5 0.5 0.5;...
-%                       0.5 0.5 0.5 0.5];
-
 baselineChanThresh = { {[0.6 0.6 0.6 0.6 0.6 0.6]}, {[1.5 0.5 0.6 0.6 0.6 0.6]}, {[0.6 0.6 0.6 0.6 1 0.6]}, ...
     {[1 1 0.6 0.6 1.1 1], [1 1 0.6 0.6 1.1 1], [1 0.8 0.6 0.6 1 1], [1 0.8 0.6 0.6 0.05 1]},...
     {[1.1 1 0.6 0.6 1 0.6], [1.1 1 0.7 0.7 0.8 0.5], [1.2 1.2 0.6 0.6 1 0.6], [1.1 1 0.6 0.6 1 0.6]},...
@@ -49,14 +41,14 @@ baselineChanThresh = { {[0.6 0.6 0.6 0.6 0.6 0.6]}, {[1.5 0.5 0.6 0.6 0.6 0.6]},
 
 neurBinSize = 1; %in ms
 
-preThreshDuration = 500; %in ms %originally was 150 ms
-preThreshbuffer = 50; %originally was 100 ms
+preThreshDuration = 300; %in ms %originally was 150 ms
+preThreshbuffer = 30; %originally was 100 ms
 
-periTransTimes = [500 250]; %in ms
+periTransTimes = [300 250]; %in ms
 
 nControlResamples = 100; %number of times to get the controls
 
-for iAnimal = 1:length(sessionNames)
+for iAnimal = 2:length(sessionNames)
 
     animalSessions = sessionNames{iAnimal};
 
@@ -275,11 +267,11 @@ for iAnimal = 1:length(sessionNames)
 
                     % only save the average to save space
                     strShiftNoBaseline = periCrossingFRShift(:,:,1:length(striatumInds)) - nanmean(periCrossingFRShift(:,1:baselineDur,1:length(striatumInds)),2);
-                    aveStrNoBaseShift{iThreshChan}(iShift,:) = nanmean(nanmean(strShiftNoBaseline,1),3);
+                    aveStrNoBaseShift{iThreshChan}(iShift,:,:) = squeeze(nanmean(strShiftNoBaseline,1));
                     ctxShiftNoBaseline = periCrossingFRShift(:,:,length(striatumInds)+1:end) - nanmean(periCrossingFRShift(:,1:baselineDur,length(striatumInds)+1:end),2);
-                    aveCtxNoBaseShift{iThreshChan}(iShift,:) = nanmean(nanmean(ctxShiftNoBaseline,1),3);
+                    aveCtxNoBaseShift{iThreshChan}(iShift,:,:) = squeeze(nanmean(ctxShiftNoBaseline,1));
                     emgShiftNoBaseline = periCrossingEMGShift(:,:,musclesForAnalysis) - nanmean(periCrossingEMGShift(:,1:baselineDur,musclesForAnalysis),2);
-                    aveEMGNoBaseShift{iThreshChan}(iShift,:) = nanmean(nanmean(emgShiftNoBaseline,1),3);
+                    aveEMGNoBaseShift{iThreshChan}(iShift,:,:) = squeeze(nanmean(emgShiftNoBaseline,1));
 
                     % also save behavior labels
                     crossUmapBehvsShift{iThreshChan} = crossRegionUmapShift;
@@ -395,11 +387,11 @@ for iAnimal = 1:length(sessionNames)
                             
                             % only save the average to save space
                             strShiftNoBaseline = controlCrossingFR(:,:,1:length(striatumInds)) - nanmean(controlCrossingFR(:,1:baselineDur,1:length(striatumInds)),2);
-                            aveStrNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:) = nanmean(nanmean(strShiftNoBaseline,1),3);
+                            aveStrNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:,:) = squeeze(nanmean(strShiftNoBaseline,1));
                             ctxShiftNoBaseline = controlCrossingFR(:,:,length(striatumInds)+1:end) - nanmean(controlCrossingFR(:,1:baselineDur,length(striatumInds)+1:end),2);
-                            aveCtxNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:) = nanmean(nanmean(ctxShiftNoBaseline,1),3);
+                            aveCtxNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:,:) = squeeze(nanmean(ctxShiftNoBaseline,1));
                             emgShiftNoBaseline = controlCrossingEMG(:,:,musclesForAnalysis) - nanmean(controlCrossingEMG(:,1:baselineDur,musclesForAnalysis),2);
-                            aveEMGNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:) = nanmean(nanmean(emgShiftNoBaseline,1),3);
+                            aveEMGNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:,:) = squeeze(nanmean(emgShiftNoBaseline,1));
 
                             % but save 2 control samples for testing
                             if iControl <= 2
@@ -417,11 +409,12 @@ for iAnimal = 1:length(sessionNames)
             end % of emg channel loop
 
             % save data for each session
-            save(filePaths.EMGTrigInitiations, 'threshCrossOrigEMG', 'threshCrossReduc', 'threshCrossNeur',...
-                'crossFRs', 'crossEMGs', 'crossUmapBehvs', 'crossClassifierBehvs', ...
+            save(filePaths.EMGTrigInitiations, 'periTransTimes', 'threshCrossOrigEMG', 'threshCrossReduc', 'threshCrossNeur',...
+                'crossFRs', 'crossEMGs', 'crossUmapBehvs', 'crossClassifierBehvs','preThreshbuffer','preThreshDuration',...
                 'threshCrossOrigEMGShifts', 'threshCrossReducShifts', 'threshCrossNeurShifts', 'shiftAmounts', ...
                 'aveStrNoBaseShift', 'aveCtxNoBaseShift', 'aveEMGNoBaseShift', 'allFRShift', 'allEMGShift', ...
                 'crossUmapBehvsShift','crossClassifierBehvsShift','aveStrNoBaseBehvsControl', 'aveCtxNoBaseBehvsControl',...
+                'aveStrNoBaseBehvsControl','aveCtxNoBaseBehvsControl','aveEMGNoBaseBehvsControl',...
                 'aveEMGNoBaseBehvsControl', 'allFRBehvControl', 'allEMGBehvControl','threshCrossOrigEMGBehvControls','-v7.3');
 
         end % of brain region loop
