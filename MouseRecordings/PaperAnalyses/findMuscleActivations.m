@@ -11,7 +11,7 @@ sessionNames = {{'D020-062922-ArenaRecording'},{'D024-111022-ArenaRecording'},{'
     {'D054-011626-ArenaRecording','D054-012126-ArenaRecording','D054-011326-ArenaRecording','D054-012426-ArenaRecording'},...
     {'D056-012726-ArenaRecording','D056-020926-ArenaRecording','D056-012926-ArenaRecording','D056-013126-ArenaRecording'}};
 
-nBrainRegions = [repmat({1},1,3) repmat({[2,2,2,2]},1,3) {[2 2 2]} {[2 2 2 2]}];
+nBrainRegions = [repmat({1},1,3) repmat({[1,1,1,1]},1,2) {[1 2 1 1]} {[1 2 1 1]} {[1 2 1 1]}];
 brainRegionNames = {'CFA', 'tjMC'};
 allBehvAlignPerms = repmat(1:7,length(sessionNames),1);
 
@@ -48,7 +48,7 @@ periTransTimes = [300 250]; %in ms
 
 nControlResamples = 100; %number of times to get the controls
 
-for iAnimal = 2:length(sessionNames)
+for iAnimal = 6:length(sessionNames)
 
     animalSessions = sessionNames{iAnimal};
 
@@ -178,8 +178,9 @@ for iAnimal = 2:length(sessionNames)
                 % get the thresh crossing times in neural and umap indices
                 [threshCrossings, reducInds, crossingNeurInds] = convertCrossInds(threshCrossings,origDownsampEMGInd,filePaths);
 
-                % remove any emg crossings that is outside of neural data range
-                outRangeCrossings = find(crossingNeurInds>size(allFRs,2)-periTransTimes(2));
+                % remove any emg crossings that is outside of neural data or reduction range
+                outRangeCrossings = find(crossingNeurInds>size(allFRs,2)-periTransTimes(2) | crossingNeurInds <= periTransTimes(1) | ...
+                    reducInds>length(regionAssignmentsFiltered)-periTransTimes(2) | reducInds <= periTransTimes(1));
                 threshCrossings(outRangeCrossings) = [];
                 crossingNeurInds(outRangeCrossings) = [];
                 reducInds(outRangeCrossings) = [];
@@ -221,8 +222,9 @@ for iAnimal = 2:length(sessionNames)
                     % find the corresponding neural index for each threshold crossing
                     [threshCrossingsShift, reducIndsShift, crossingNeurIndsShift] = convertCrossInds(threshCrossingsShift,origDownsampEMGInd,filePaths);
 
-                    % remove any emg crossings that is outside of neural data range
-                    outRangeCrossings = find(crossingNeurIndsShift>size(allFRs,2)-periTransTimes(2));
+                    % remove any emg crossings that is outside of neural data or umap range
+                    outRangeCrossings = find(crossingNeurIndsShift>size(allFRs,2)-periTransTimes(2) | crossingNeurIndsShift<=periTransTimes(1) | ...
+                        reducIndsShift>length(regionAssignmentsFiltered)-periTransTimes(2) | reducIndsShift <= periTransTimes(1));
                     threshCrossingsShift(outRangeCrossings) = [];
                     crossingNeurIndsShift(outRangeCrossings) = [];
                     reducIndsShift(outRangeCrossings) = [];
@@ -353,7 +355,8 @@ for iAnimal = 2:length(sessionNames)
                                 [controlCrossings, reducIndsControl, crossingNeurIndsControl] = convertCrossInds(controlCrossings,origDownsampEMGInd,filePaths);
 
                                 % remove any emg crossings that is outside of neural data range
-                                outRangeCrossings = find(crossingNeurIndsControl>size(allFRs,2)-periTransTimes(2));
+                                outRangeCrossings = find(crossingNeurIndsControl>size(allFRs,2)-periTransTimes(2) | crossingNeurIndsControl<=periTransTimes(1) | ...
+                                    reducIndsControl>length(regionAssignmentsFiltered)-periTransTimes(2) | reducIndsControl<=periTransTimes(1));
                                 controlCrossings(outRangeCrossings) = [];
                                 crossingNeurIndsControl(outRangeCrossings) = [];
                                 reducIndsControl(outRangeCrossings) = [];
@@ -391,7 +394,7 @@ for iAnimal = 2:length(sessionNames)
                             ctxShiftNoBaseline = controlCrossingFR(:,:,length(striatumInds)+1:end) - nanmean(controlCrossingFR(:,1:baselineDur,length(striatumInds)+1:end),2);
                             aveCtxNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:,:) = squeeze(nanmean(ctxShiftNoBaseline,1));
                             emgShiftNoBaseline = controlCrossingEMG(:,:,musclesForAnalysis) - nanmean(controlCrossingEMG(:,1:baselineDur,musclesForAnalysis),2);
-                            aveEMGNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:,:) = squeeze(nanmean(emgShiftNoBaseline,1));
+                            aveEMGNoBaseBehvsControl.(behvTypeNames{iBehvType}){iThreshChan,iBehv}(iControl,:) = nanmean(nanmean(emgShiftNoBaseline,1),3);
 
                             % but save 2 control samples for testing
                             if iControl <= 2
