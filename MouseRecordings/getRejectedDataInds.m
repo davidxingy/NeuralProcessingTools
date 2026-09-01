@@ -1,7 +1,11 @@
-function rejectedInds = getRejectedDataInds(frameNeuropixelSamples)
+function [rejectedInds rejectedBlockVids, rejectedBlockFrames] = getRejectedDataInds(frameNeuropixelSamples)
 % function to get the indices in the neuropixel recordings which are
 % removed (e.g. D024 which has some periods of dropped packets) and are
 % identified by nans in the frame-neuropixel sync mappings
+% 
+% David updated 9/1/26 - also have it output the frames so outside the
+% function I can use frameEMGSamples to get the timepoints in EMG time as
+% using NeurEMGSync does not work
 
 nFrames = cumsum(cellfun(@length, frameNeuropixelSamples{1}));
 % concatenate across videos first
@@ -11,6 +15,8 @@ nanFrames = find(isnan(allFrameSyncInds));
 
 if isempty(nanFrames)
     rejectedInds = [];
+    rejectedBlockVids = {};
+    rejectedBlockFrames = {};
     return
 end
     
@@ -29,6 +35,9 @@ for iNanBlock = 1:length(nanBlocksStartFrames)
     
     blockInds{iNanBlock} = frameNeuropixelSamples{1}{thisStartVid}(thisStartVidFrames) : ...
         frameNeuropixelSamples{1}{thisStopVid}(thisStopVidFrames);
+
+    rejectedBlockVids{iNanBlock} = [thisStartVid thisStopVid];
+    rejectedBlockFrames{iNanBlock} = [thisStartVidFrames thisStopVidFrames];
     
 end
 
